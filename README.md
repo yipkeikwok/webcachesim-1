@@ -146,6 +146,16 @@ example usage (each segment gets half the capacity)
 
     ./webcachesim test.tr LRUK 1000 k=4
 
+#### AdaptSize (version 0.1)
+
+does: uses adaptive ExpLRU (ExpProb-LRU) policy that adapts with request traffic, [adapted from the official implementation](https://github.com/dasebe/AdaptSize)
+
+params: t - reconfiguration interval (default 500K), i - numeric iteration (precision, default 15)
+
+example usage
+
+    ./webcachesim test.tr AdaptSize 1000 t=1000000 i=5
+
 
 ## How to get traces:
 
