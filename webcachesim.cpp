@@ -1,6 +1,7 @@
 #include <fstream>
 #include <string>
 #include <regex>
+#include "caches/lhd_variants.h"
 #include "caches/lru_variants.h"
 #include "caches/gd_variants.h"
 #include "request.h"

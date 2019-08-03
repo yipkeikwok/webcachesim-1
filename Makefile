@@ -1,4 +1,5 @@
 TARGET = webcachesim
+OBJS += caches/lhd_variants.o
 OBJS += caches/lru_variants.o
 OBJS += caches/gd_variants.o
 OBJS += random_helper.o
