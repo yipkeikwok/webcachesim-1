@@ -53,14 +53,24 @@ void LHDCache::admit(SimpleRequest* req)
     }
     // admit new object
     CacheObject obj(req);
+	/** 
+	TODO: add obj into _cacheMap 
+	TODO: deduce classID 
+	TODO: update classes[classID].hit[age] 
     _cacheList.push_front(obj);
     _cacheMap[obj] = _cacheList.begin();
+	*/ 
+    /** begin: FIFO */
+    _cacheList.push_back(obj); 
+    _cacheMap[obj]=_cacheList.end();   
+    /** end: FIFO */
     _currentSize += size;
     LOG("a", _currentSize, obj.id, obj.size);
 }
 
 void LHDCache::evict(SimpleRequest* req)
 {
+	#if 0
     CacheObject obj(req);
     auto it = _cacheMap.find(obj);
     if (it != _cacheMap.end()) {
@@ -68,15 +78,20 @@ void LHDCache::evict(SimpleRequest* req)
         LOG("e", _currentSize, obj.id, obj.size);
         _currentSize -= obj.size;
         _cacheMap.erase(obj);
+	/** 
+	TODO: update classes[classID].hit[age] 
         _cacheList.erase(lit);
+	*/
     } else {
 	std::cerr << "Eviction victim cannot be found in cache" << std::endl;
 	std::exit(1);
     }
+	#endif
 }
 
 SimpleRequest* LHDCache::evict_return()
 {
+	#if 0
     // evict least popular (i.e. last element)
     if (_cacheList.size() > 0) {
         ListIteratorType lit = _cacheList.end();
@@ -90,6 +105,41 @@ SimpleRequest* LHDCache::evict_return()
         return req;
     }
     return NULL;
+	#endif
+
+    /** begin: FIFO */
+    if(_cacheList.size()>0) {
+        ListIteratorType lit=_cacheList.begin(); 
+        CacheObject obj=*lit;
+        LOG("e", _currentSize, obj.id, obj.size);
+        SimpleRequest* req=new SimpleRequest(obj.appId, obj.id, obj.size); 
+        _currentSize -= obj.size;
+        _cacheMap.erase(obj); 
+        _cacheList.erase(lit);
+        return req;
+    }
+    /** end: FIFO */
+   
+    rank_t victimRank = std::numeric_limits<rank_t>::max();
+    victimRank+=.0; // for working around the 'unused-variable' compiler error 
+
+    // Sample few candidates early in the trace so that we converge
+    // quickly to a reasonable policy.
+    //
+    // This is a hack to let us have shorter warmup so we can evaluate
+    // a longer fraction of the trace; doesn't belong in a real
+    // system.
+    uint32_t candidates =
+        (numReconfigurations > 50)?
+        ASSOCIATIVITY : 8;
+    
+    for(uint32_t i=0; i<candidates; i++) {
+        auto idx = rand.next() % _cacheMap.size(); 
+        auto& tag = tags[idx];
+        std::cout << tag.size <<std::endl; 
+    }
+
+	return NULL; 
 }
 
 void LHDCache::evict()
@@ -99,13 +149,15 @@ void LHDCache::evict()
 
 // const_iterator: a forward iterator to const value_type, where 
 // value_type is pair<const key_type, mapped_type>
-void LHDCache::hit(lruCacheMapType::const_iterator it, uint64_t size)
+void LHDCache::hit(lhdCacheMapType::const_iterator it, uint64_t size)
 {
+	#if 0
     // transfers it->second (i.e., ObjInfo) from _cacheList into 
     // 	*this. The transferred it->second is to be inserted before 
     // 	the element pointed to by _cacheList.begin()
     //
     // _cacheList is defined in class LRUCache in lru_variants.h 
     _cacheList.splice(_cacheList.begin(), _cacheList, it->second);
+	#endif
 }
 

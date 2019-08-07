@@ -55,8 +55,9 @@ int main (int argc, char* argv[])
   while (infile >> t >> id >> size)
     {
         reqs++;
-        
-        req->reinit(id,size);
+ 
+        // hardcode 0 as the appId        
+        req->reinit(0,id,size);
         if(webcache->lookup(req)) {
             hits++;
         } else {

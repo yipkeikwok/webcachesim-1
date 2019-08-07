@@ -4,12 +4,14 @@
 #include <cstdint>
 #include <iostream>
 
+typedef uint64_t AppIdType; 
 typedef uint64_t IdType;
 
 // Request information
 class SimpleRequest
 {
 private:
+    AppIdType _appId; // request app id 
     IdType _id; // request object id
     uint64_t _size; // request size in bytes
 
@@ -28,17 +30,37 @@ public:
     {
     }
 
+    SimpleRequest(AppIdType appId, IdType id, uint64_t size) 
+        : _appId(appId), 
+          _id(id),  
+          _size(size) 
+    {
+    }
+
     void reinit(IdType id, uint64_t size)
     {
         _id = id;
         _size = size;
     }
 
+    void reinit(AppIdType appId, IdType id, uint64_t size)
+    {
+        _appId = appId; 
+        _id = id;
+        _size = size;
+    }
 
     // Print request to stdout
     void print() const
     {
-        std::cout << "id" << getId() << " size " << getSize() << std::endl;
+        std::cout << "appId" << getAppId() << "id" << getId() << " size " 
+		<< getSize() << std::endl;
+    }
+
+    // Get request app id 
+    AppIdType getAppId() const 
+    {
+        return _appId; 
     }
 
     // Get request object id

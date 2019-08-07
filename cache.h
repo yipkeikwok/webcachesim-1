@@ -12,7 +12,7 @@
 #include "request.h"
 
 // uncomment to enable cache debugging:
-// #define CDEBUG 1
+#define CDEBUG 1
 
 // util for debug
 #ifdef CDEBUG

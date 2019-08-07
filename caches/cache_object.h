@@ -6,17 +6,19 @@
 // CacheObject is used by caching policies to store a representation of an "object, i.e., the object's id and its size
 struct CacheObject
 {
+    AppIdType appId; 
     IdType id;
     uint64_t size;
 
     CacheObject(SimpleRequest* req)
-        : id(req->getId()),
+        : appId(req->getAppId()), 
+          id(req->getId()),
           size(req->getSize())
     {}
 
     // comparison is based on all three properties
     bool operator==(const CacheObject &rhs) const {
-        return (rhs.id == id) && (rhs.size == size);
+        return (rhs.appId == appId) && (rhs.id == id) && (rhs.size == size);
     }
 };
 
@@ -35,6 +37,7 @@ namespace std
         inline size_t operator()(const CacheObject cobj) const
         {
             size_t seed = 0;
+            hash_combine<AppIdType>(seed, cobj.appId); 
             hash_combine<IdType>(seed, cobj.id);
             hash_combine<uint64_t>(seed, cobj.size);
             return seed;
