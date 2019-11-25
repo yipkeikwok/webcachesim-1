@@ -208,6 +208,51 @@ public:
 
 static Factory<S4LRUCache> factoryS4LRU("S4LRU");
 
+/*
+  AdaptSize-S4LRU: AdaptSize for admission, S4LRU for eviction
+*/
+class AdaptSizeS4LRUCache : public S4LRUCache
+{
+public: 
+    AdaptSizeS4LRUCache();
+    virtual ~AdaptSizeS4LRUCache()
+    {
+    }
 
+    virtual void setPar(std::string parName, std::string parValue);
+    virtual bool lookup(SimpleRequest*);
+    virtual void admit(SimpleRequest*);
+
+private: 
+    double _cParam; //
+    uint64_t statSize;
+    uint64_t _maxIterations;
+    uint64_t _reconfiguration_interval;
+    uint64_t _nextReconfiguration;
+    double _gss_v;  // golden section search book parameters
+    // for random number generation 
+    std::uniform_real_distribution<double> _uniform_real_distribution = 
+        std::uniform_real_distribution<double>(0.0, 1.0); 
+
+    struct ObjInfo {
+        double requestCount; // requestRate in adaptsize_stub.h
+        uint64_t objSize;
+
+        ObjInfo() : requestCount(0.0), objSize(0) { }
+    };
+    std::unordered_map<CacheObject, ObjInfo> _longTermMetadata;
+    std::unordered_map<CacheObject, ObjInfo> _intervalMetadata;
+
+    void reconfigure();
+    double modelHitRate(double c);
+
+    // align data for vectorization
+    std::vector<double> _alignedReqCount;
+    std::vector<double> _alignedObjSize;
+    std::vector<double> _alignedAdmProb;
+};
+
+static Factory<AdaptSizeS4LRUCache> 
+	factoryAdaptSizeS4LRU("AdaptSizeS4LRU");
 
 #endif
