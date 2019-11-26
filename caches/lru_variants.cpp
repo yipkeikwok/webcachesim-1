@@ -490,6 +490,7 @@ double AdaptSizeCache::modelHitRate(double log2c) {
 */
 
 void S4LRUCache::setSize(uint64_t cs) {
+	Cache::setSize(cs);
     uint64_t total = cs;
     for(int i=0; i<4; i++) {
         segments[i].setSize(cs/4);
