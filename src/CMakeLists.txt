@@ -23,6 +23,8 @@ set(LIB_SOURCE
 
         ${WEBCACHESIM_HEADER_DIR}/caches/lru_variants.h
         caches/lru_variants.cpp
+        ${WEBCACHESIM_HEADER_DIR}/caches/lfo.h
+        caches/lfo.cpp
         ${WEBCACHESIM_HEADER_DIR}/caches/belady.h
         caches/belady.cpp
         ${WEBCACHESIM_HEADER_DIR}/caches/gd_variants.h
