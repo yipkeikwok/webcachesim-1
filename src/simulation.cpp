@@ -14,6 +14,7 @@
 #include <numeric>
 #include "bsoncxx/builder/basic/document.hpp"
 #include "bsoncxx/json.hpp"
+//#include <cassert>
 
 using namespace std;
 using namespace chrono;
@@ -134,6 +135,7 @@ void FrameWork::update_stats() {
          << endl;
     t_now = _t_now;
     cerr << "segment bmr: " << double(byte_miss) / byte_req << endl;
+    cerr << "segment omr: " << double(obj_miss) / obj_req << endl;
     seg_byte_miss.emplace_back(byte_miss);
     seg_byte_req.emplace_back(byte_req);
     seg_object_miss.emplace_back(obj_miss);
@@ -231,6 +233,25 @@ bsoncxx::builder::basic::document FrameWork::simulate() {
     //for the residue segment of trace
     update_real_time_stats();
     update_stats();
+	//assert((seg_object_miss.size()==seg_object_req.size()) &&
+	//assert((seg_object_miss.size()==1) &&
+		//"seg_object_miss.size() should == seg_object_req.size()"); 
+    std::cerr<<"seg_object_miss.size()="<<seg_object_miss.size()<<std::endl;
+    std::cerr<<"seg_object_req.size()="<<seg_object_req.size()<<std::endl;
+    int64_t seg_object_miss_total, seg_object_req_total;
+    seg_object_miss_total=seg_object_req_total=(int64_t)0; 
+    for(const auto &seg_object_miss_elmnt : seg_object_miss) {
+        seg_object_miss_total+=seg_object_miss_elmnt;
+    }
+    for(const auto &seg_object_req_elmnt  : seg_object_req)  {
+        seg_object_req_total +=seg_object_req_elmnt; 
+    }
+    double overall_ohr; 
+    overall_ohr=(double)seg_object_req_total;
+    overall_ohr-=(double)seg_object_miss_total; // overall hits
+    overall_ohr/=(double)seg_object_req_total; // overall OHR
+    std::cerr<<"overall OHR="<<(seg_object_req_total-seg_object_miss_total)
+        <<"/"<<(seg_object_req_total)<<"="<<overall_ohr<<std::endl;
     infile.close();
 
     return simulation_results();
