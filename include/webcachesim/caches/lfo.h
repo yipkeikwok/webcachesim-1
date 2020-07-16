@@ -18,6 +18,15 @@ typedef std::unordered_map<uint64_t , ListIteratorType> lfoCacheMapType;
 
 using namespace std;
 using namespace webcachesim;
+
+namespace LFO {
+    //nmbr of rqst arrived so far
+    uint64_t train_seq=(uint64_t)0;
+    uint64_t windowSize=(uint64_t)1000000; 
+
+    void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
+}
+
 /*
   LFO: Learning from OPT
 */

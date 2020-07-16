@@ -58,6 +58,7 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 #endif
 
+    LFO::annotate(LFO::train_seq++, 0, 0, 0.0); 
 
     uint64_t & obj = req._id;
     auto it = _cacheMap.find(obj);
@@ -161,3 +162,8 @@ bool LFOCache::exist(const KeyT &key) {
     return _cacheMap.find(key) != _cacheMap.end();
 }
 
+void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
+    if(!(seq % LFO::windowSize)) 
+        std::cerr<<"Starting Window"<<seq/LFO::windowSize<<std::endl; 
+    return; 
+}
