@@ -2,7 +2,9 @@
 #define LFO_VARIANTS_H
 
 #include <unordered_map>
+#include <boost/functional/hash.hpp>
 #include <unordered_set>
+#include <utility>
 #include <list>
 #include <random>
 #include "cache.h"
@@ -19,10 +21,42 @@ typedef std::unordered_map<uint64_t , ListIteratorType> lfoCacheMapType;
 using namespace std;
 using namespace webcachesim;
 
+struct optEntry {
+    uint64_t idx; 
+    uint64_t volume;
+    bool hasNext;
+
+    optEntry(uint64_t idx) : 
+        idx(idx), 
+        volume(std::numeric_limits<uint64_t>::max()), 
+        hasNext(false) {
+    };
+};
+
+struct trEntry {
+    uint64_t id;
+    uint64_t size;
+    double cost; 
+    bool toCache; 
+
+    trEntry(uint64_t id, uint64_t size, double cost) : 
+        id(id), size(size), cost(cost), toCache(false) {
+    };
+};
+
 namespace LFO {
     //nmbr of rqst arrived so far
     uint64_t train_seq=(uint64_t)0;
     uint64_t windowSize=(uint64_t)1000000; 
+    //std::pair<uint64_t, uint64_t> idsize;
+    std::unordered_map<
+        std::pair<uint64_t,uint64_t>, 
+        uint64_t, 
+        boost::hash<std::pair<uint64_t,uint64_t>>
+        > windowLastSeen; 
+    std::vector<optEntry> windowOpt;
+    std::vector<trEntry> windowTrace;
+    uint64_t windowByteSum = 0;
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
 }

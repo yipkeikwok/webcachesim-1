@@ -1,4 +1,4 @@
-#include <unordered_map>
+//#include <unordered_map>
 #include <random>
 #include <cmath>
 #include <cassert>
@@ -58,7 +58,8 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 #endif
 
-    LFO::annotate(LFO::train_seq++, 0, 0, 0.0); 
+    LFO::train_seq++;
+    LFO::annotate(LFO::train_seq, 0, 0, 0.0); 
 
     uint64_t & obj = req._id;
     auto it = _cacheMap.find(obj);
@@ -164,6 +165,19 @@ bool LFOCache::exist(const KeyT &key) {
 
 void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     if(!(seq % LFO::windowSize)) 
-        std::cerr<<"Starting Window"<<seq/LFO::windowSize<<std::endl; 
+        std::cerr<<"End Window"<<(seq/LFO::windowSize-1)<<std::endl; 
+
+    const uint64_t idx= (seq-1) % LFO::windowSize; 
+    const auto idsize = std::make_pair(id, size); 
+    if(LFO::windowLastSeen.count(idsize)>0) {
+        LFO::windowOpt[LFO::windowLastSeen[idsize]].hasNext = true;
+        LFO::windowOpt[LFO::windowLastSeen[idsize]].volume = (idx - 
+           LFO::windowLastSeen[idsize]) * size;
+    }
+    LFO::windowByteSum += size;
+    LFO::windowLastSeen[idsize]=idx;
+    LFO::windowOpt.emplace_back(idx); 
+    LFO::windowTrace.emplace_back(id, size, cost);
+
     return; 
 }
