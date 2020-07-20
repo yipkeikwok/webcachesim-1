@@ -59,7 +59,10 @@ bool LFOCache::lookup(SimpleRequest& req)
 #endif
 
     LFO::train_seq++;
-    LFO::annotate(LFO::train_seq, 0, 0, 0.0); 
+    LFO::annotate(LFO::train_seq, req._id, req._size, 0.0); 
+    if(!(LFO::train_seq%LFO::windowSize)) {
+        LFO::calculateOPT(getSize());
+    }
 
     uint64_t & obj = req._id;
     auto it = _cacheMap.find(obj);
@@ -164,8 +167,9 @@ bool LFOCache::exist(const KeyT &key) {
 }
 
 void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
-    if(!(seq % LFO::windowSize)) 
+    if(!(seq % LFO::windowSize)) {
         std::cerr<<"End Window"<<(seq/LFO::windowSize-1)<<std::endl; 
+    }
 
     const uint64_t idx= (seq-1) % LFO::windowSize; 
     const auto idsize = std::make_pair(id, size); 
@@ -181,3 +185,35 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
 
     return; 
 }
+
+void LFO::calculateOPT(uint64_t cacheSize) {
+    /**
+    Note: cacheSize=physical cache size - size of metadata
+    i.e., size of the cache used to store objects 
+
+    */ 
+
+    sort(LFO::windowOpt.begin(), LFO::windowOpt.end(), 
+        [](const struct optEntry &lhs, const struct optEntry &rhs) {
+            return lhs.volume < rhs.volume;
+    });
+
+    uint64_t cacheVolume = cacheSize * LFO::windowSize;
+    uint64_t currentVolume = 0;
+    uint64_t hitc = 0;
+    uint64_t bytehitc = 0;
+    for (auto &it: LFO::windowOpt) {
+        if (currentVolume > cacheVolume) {
+            break;
+        }
+        if (it.hasNext) {
+            LFO::windowTrace[it.idx].toCache = true;
+            hitc++;
+            bytehitc += LFO::windowTrace[it.idx].size;
+            currentVolume += it.volume;
+        }
+    }
+    std::cerr<<"LFO::calculateOPT: cacheSize = "<<cacheSize
+        <<", hitc = "<< hitc <<", bytehitc = "<< bytehitc <<std::endl; 
+}
+

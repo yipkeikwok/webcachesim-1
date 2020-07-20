@@ -59,6 +59,7 @@ namespace LFO {
     uint64_t windowByteSum = 0;
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
+    void calculateOPT(uint64_t cacheSize); 
 }
 
 /*
