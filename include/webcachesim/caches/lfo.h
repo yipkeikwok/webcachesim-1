@@ -57,6 +57,10 @@ namespace LFO {
     std::vector<optEntry> windowOpt;
     std::vector<trEntry> windowTrace;
     uint64_t windowByteSum = 0;
+    // unordered_map<uint64_t objectID, list<uint64_t> accessTimestamp> 
+    //  accessTimestamp: since beginning of each sliding window 
+    //      in descending order: later timestamps before older 
+    std::unordered_map<uint64_t, std::list<uint64_t>> statistics; 
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
     void calculateOPT(uint64_t cacheSize); 

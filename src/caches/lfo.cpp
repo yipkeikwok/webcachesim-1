@@ -62,6 +62,29 @@ bool LFOCache::lookup(SimpleRequest& req)
     LFO::annotate(LFO::train_seq, req._id, req._size, 0.0); 
     if(!(LFO::train_seq%LFO::windowSize)) {
         LFO::calculateOPT(getSize());
+        // deriveFeatures();
+        // trainModel();
+        std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
+        const auto it = LFO::statistics.cbegin();
+        std::list<uint64_t> list0 = it->second;
+
+        bool flag0=true; 
+        uint32_t count0;
+        count0=(uint32_t)0;
+        for(const auto& it : LFO::statistics) {
+            std::list listAccessTimestamps = it.second;
+            if(listAccessTimestamps.size() > 1) {
+                flag0=false;
+                count0++;
+            }
+        }
+        if(flag0) {
+            std::cerr<<"only 1 element on each list"<<std::endl;
+        } else {
+            std::cerr<<count0<<" elements have >=1 elements"<<std::endl;
+        }
+
+        LFO::statistics.clear();
     }
 
     uint64_t & obj = req._id;
@@ -172,6 +195,16 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     }
 
     const uint64_t idx= (seq-1) % LFO::windowSize; 
+    // store access timestamps
+    if(LFO::statistics.count(id)) {
+        std::list<uint64_t>& list0=LFO::statistics[id];
+        list0.push_front(idx);
+    } else {
+        // first time this object is accessed in this sliding window 
+        std::list<uint64_t> list0;
+        list0.push_front(id);
+        LFO::statistics[id]=list0;
+    }
     const auto idsize = std::make_pair(id, size); 
     if(LFO::windowLastSeen.count(idsize)>0) {
         LFO::windowOpt[LFO::windowLastSeen[idsize]].hasNext = true;
