@@ -62,7 +62,13 @@ bool LFOCache::lookup(SimpleRequest& req)
     LFO::annotate(LFO::train_seq, req._id, req._size, 0.0); 
     if(!(LFO::train_seq%LFO::windowSize)) {
         LFO::calculateOPT(getSize());
-        // deriveFeatures();
+
+        std::vector<float> labels;
+        std::vector<int32_t> indptr;
+        std::vector<int32_t> indices;
+        std::vector<double> data;
+        int sampling=2; // 1: select later requested object, 2: select randomly
+        LFO::deriveFeatures(labels, indptr, indices, data, sampling, getSize());
         // trainModel();
         std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
         const auto it = LFO::statistics.cbegin();
@@ -246,7 +252,17 @@ void LFO::calculateOPT(uint64_t cacheSize) {
             currentVolume += it.volume;
         }
     }
-    std::cerr<<"LFO::calculateOPT: cacheSize = "<<cacheSize
+    std::cerr<<"LFO::calculateOPT: cacheSize = " <<cacheSize
         <<", hitc = "<< hitc <<", bytehitc = "<< bytehitc <<std::endl; 
+}
+
+void LFO::deriveFeatures(vector<float> &labels, vector<int32_t> &indptr, 
+    vector<int32_t> &indices, vector<double> &data, int sampling, 
+    uint64_t freeCacheSizeBeginningWindow) {
+    int64_t cacheAvailBytes = freeCacheSizeBeginningWindow;
+    std::cerr<<"LFO::deriveFeatures(), cacheAvailBytes= "<<cacheAvailBytes
+        <<std::endl; 
+    
+    return;
 }
 
