@@ -45,10 +45,25 @@ struct trEntry {
 };
 
 namespace LFO {
+    //Will be used to obtain a seed for the random number engine
+    std::random_device rd;
+    //Standard mersenne_twister_engine seeded with rd()
+    std::mt19937 gen(rd()); 
+    std::uniform_real_distribution<> dis(0.0, 1.0);
     //nmbr of rqst arrived so far
     uint64_t train_seq=(uint64_t)0;
     uint64_t windowSize=(uint64_t)1000000; 
+    int sampling=1;
+    // learning samples for model training
+    // Sampling Mode 1: The number of requests at the end of windowTrace that 
+    //  are used for deriving features (deriveFeatures())
+    // Sampling Mode 2: The number of requests in windowTrace that are used for 
+    //  deriving features. Those requests are evenly distributed in windowTrace
+    uint64_t sampleSize = windowSize; 
     //std::pair<uint64_t, uint64_t> idsize;
+    // stored the index (starting from 0) within the current sliding window
+    //  when an object was last accessed
+    //  <<object ID, object size>, index>
     std::unordered_map<
         std::pair<uint64_t,uint64_t>, 
         uint64_t, 
@@ -68,6 +83,8 @@ namespace LFO {
        vector<int32_t> &indices, vector<double> &data, int sampling, 
         uint64_t cacheSize);
 }
+
+#define HISTFEATURES 50 //online features
 
 /*
   LFO: Learning from OPT
