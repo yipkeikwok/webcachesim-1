@@ -1,11 +1,14 @@
 //#include <unordered_map>
 #include <random>
 #include <cmath>
+#include <string>
 /**
 // NDEBUG is defined somewhere in this application. I do not know where.
 #include <cassert>
 */
 #include <cstdlib>
+#include <LightGBM/application.h>
+#include <LightGBM/c_api.h>
 #include "lfo.h"
 #include "random_helper.h"
 
@@ -155,7 +158,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         }
         */
         /** TESTING_CODE::end */
-        // trainModel();
+        LFO::trainModel(labels, indptr, indices, data);
         labels.clear();
         indptr.clear();
         indices.clear();
@@ -283,6 +286,8 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     if(LFO::statistics.count(id)) {
         std::list<uint64_t>& list0=LFO::statistics[id];
         list0.push_front(idx);
+        if(list0.size() > HISTFEATURES) 
+            list0.pop_back();
     } else {
         // first time this object is accessed in this sliding window 
         std::list<uint64_t> list0;
@@ -534,3 +539,75 @@ void LFO::deriveFeatures(std::vector<float> &labels,
 
 }
 
+void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr, 
+    vector<int32_t> &indices, vector<double> &data) {
+
+    DatasetHandle trainData;
+    /** TESTING_CODE::beginning */
+    /**
+    std::cerr
+        << "size: "
+        << "labels "  << labels.size()  << " "
+        << "indptr "  << indptr.size()  << " "
+        << "indices " << indices.size() << " "
+        << "data "    << data.size()    << " "
+        << std::endl;
+    */
+    /** TESTING_CODE::end */
+    LGBM_DatasetCreateFromCSR(
+        static_cast<void *>(indptr.data()), C_API_DTYPE_INT32, 
+        indices.data(), 
+        static_cast<void *>(data.data()), C_API_DTYPE_FLOAT64, 
+        indptr.size(), 
+        data.size(), 
+        HISTFEATURES + 3, 
+        LFO::trainParams, nullptr, &trainData);
+
+    LGBM_DatasetSetField(
+        trainData, "label", 
+        static_cast<void *>(labels.data()), labels.size(), 
+        C_API_DTYPE_FLOAT32);
+
+    if(LFO::init) {
+        /** TESTING_CODE::beginning */
+        /**
+        std::cerr<<"LFO::trainModel(): LFO::init==true"<<std::endl; 
+        */
+        /** TESTING_CODE::end */
+        // init booster //YK: create a new boosting learner
+        LGBM_BoosterCreate(trainData, LFO::trainParams, &LFO::booster);
+        // train
+        for (int i = 0; i < std::stoi(LFO::trainParams["num_iterations"]); 
+            i++) {
+            int isFinished;
+            // YK: update the model for 1 iteration 
+            LGBM_BoosterUpdateOneIter(LFO::booster, &isFinished);
+            if (isFinished) {
+                break;
+            }
+        }
+        LFO::init = false;
+    } else {
+        /** TESTING_CODE::beginning */
+        /**
+        std::cerr<<"LFO::trainModel(): LFO::init==false"<<std::endl; 
+        */
+        /** TESTING_CODE::end */
+        BoosterHandle newBooster;
+        LGBM_BoosterCreate(trainData, LFO::trainParams, &newBooster);
+        // train a new booster
+        for (int i = 0; i < std::stoi(LFO::trainParams["num_iterations"]); 
+            i++) {
+            int isFinished;
+            LGBM_BoosterUpdateOneIter(newBooster, &isFinished);
+            if (isFinished) {
+                break;
+            }
+        }
+        LGBM_BoosterFree(LFO::booster);
+        LFO::booster = newBooster;
+    }
+    LGBM_DatasetFree(trainData);
+
+    return;
+}

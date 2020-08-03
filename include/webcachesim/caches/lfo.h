@@ -54,6 +54,8 @@ namespace LFO {
     uint64_t train_seq=(uint64_t)0;
     uint64_t windowSize=(uint64_t)1000000; 
     int sampling=1;
+    bool init = true;
+    BoosterHandle booster;
     // learning samples for model training
     // Sampling Mode 1: The number of requests at the end of windowTrace that 
     //  are used for deriving features (deriveFeatures())
@@ -76,12 +78,45 @@ namespace LFO {
     //  accessTimestamp: since beginning of each sliding window 
     //      in descending order: later timestamps before older 
     std::unordered_map<uint64_t, std::list<uint64_t>> statistics; 
+    /**
+    default values in trainParams can be found in 
+    https://lightgbm.readthedocs.io/en/latest/Parameters.html
+
+    I change the values of the following from the provided code. 
+    num_threads: for the best speed, set this to the number of real CPU cores, 
+        not the number of threads (most CPUs use hyper-threading to generate 2 
+        threads per CPU core)
+    num_iterations: the paper suggests 30
+    */
+    std::unordered_map<string, string> trainParams = {
+            {"boosting",                   "gbdt"},
+            {"objective",                  "binary"},
+            {"metric",                     "binary_logloss,auc"},
+            {"metric_freq",                "1"},
+            {"is_provide_training_metric", "true"},
+            {"max_bin",                    "255"},
+            {"num_iterations",             "30"},
+            {"learning_rate",              "0.1"},
+            {"num_leaves",                 "31"},
+            {"tree_learner",               "serial"},
+            {"num_threads",                "2"},
+            {"feature_fraction",           "0.8"},
+            {"bagging_freq",               "5"},
+            {"bagging_fraction",           "0.8"},
+            {"min_data_in_leaf",           "50"},
+            {"min_sum_hessian_in_leaf",    "5.0"},
+            {"is_enable_sparse",           "true"},
+            {"two_round",                  "false"},
+            {"save_binary",                "false"}
+    };
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
     void calculateOPT(uint64_t cacheSize); 
     void deriveFeatures(vector<float> &labels, vector<int32_t> &indptr, 
        vector<int32_t> &indices, vector<double> &data, int sampling, 
         uint64_t cacheSize);
+    void trainModel(vector<float> &labels, vector<int32_t> &indptr, 
+        vector<int32_t> &indices, vector<double> &data);
 }
 
 #define HISTFEATURES 50 //online features
