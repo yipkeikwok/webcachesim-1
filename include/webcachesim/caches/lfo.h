@@ -45,6 +45,11 @@ struct trEntry {
 };
 
 namespace LFO {
+    // objective: 0 for OHR, 1 for BHR
+    int8_t OHR=(int8_t)0; 
+    int8_t BHR=(int8_t)1; 
+    int8_t objective = LFO::OHR; 
+
     //Will be used to obtain a seed for the random number engine
     std::random_device rd;
     //Standard mersenne_twister_engine seeded with rd()

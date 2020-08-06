@@ -72,7 +72,88 @@ bool LFOCache::lookup(SimpleRequest& req)
 #endif
 
     LFO::train_seq++;
-    LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
+    if(LFO::objective == LFO::OHR) 
+        LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
+    else if(LFO::objective == LFO::BHR)
+        LFO::annotate(LFO::train_seq, req._id, req._size, req._size); 
+    else {
+        std::cerr<<"Invalid LFO::objective " << LFO::objective <<std::endl; 
+        std::exit(EXIT_FAILURE);
+    }
+
+    /** predicting rehit probability::beginning */
+    /** obtain shift time-invariant time gaps */
+    std::vector<int32_t> indptr; 
+    std::vector<int32_t> indices; 
+    std::vector<double>  data; 
+    std::vector<double>  result;
+    int64_t              len_result;
+    
+    if(LFO::statistics.count(req._id) == 0) {
+        std:cerr<<"access timestamp of Object " << req._id 
+            << " not exist in LFO::statisics" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    // curQueue stores the access timestamps in descending order 
+    //  i.e., latest first
+    //  The timstamps are offset to the beginning of each sliding window 
+    //  See deriveFeatures() 
+    std::list<uint64_t>& curQueue = LFO::statistics[req._id];
+    int32_t idx = 0; 
+    uint64_t lastReqTime = (LFO::train_seq - 1)%LFO::windowSize; 
+    for(auto &lit: curQueue) {
+        const uint64_t dist = lastReqTime - lit; 
+        indices.push_back(idx); 
+        data.push_back(dist);
+        idx++;
+        lastReqTime = lit;
+    }
+    // object size
+    indices.push_back(HISTFEATURES); 
+    data.push_back(std::round(100*std::log2(req._size))); 
+    // available cache space
+    indices.push_back(HISTFEATURES+1); 
+    uint64_t cacheAvailBytes = getSize(); 
+    double currentSize = cacheAvailBytes <= 0 ? 0 : 
+        std::round(100*std::log2(cacheAvailBytes));
+    data.push_back(std::round(100*std::log2(currentSize))); 
+    // cost 
+    indices.push_back(HISTFEATURES+2);
+    /** TESTING_CODE::beginning */
+    if((LFO::objective != LFO::OHR) && (LFO::objective != LFO::BHR)) {
+        std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+        std::exit(EXIT_FAILURE);
+    }
+    /** 
+    if((LFO::objective == LFO::OHR) && (req._cost!=1)) {
+        std::cerr<<"Invalid req cost for OHR: " << req._cost << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    if((LFO::objective == LFO::BHR) && (req._cost!=req._size)) {
+        std::cerr<<"Invalid req cost for BHR: " << req._cost << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    */
+    /** TESTING_CODE::end */
+    if(LFO::objective == LFO::OHR) 
+        data.push_back((double)1); 
+    else if(LFO::objective == LFO::BHR) 
+        data.push_back((double)req._size); 
+    else {
+        std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+        std::exit(EXIT_FAILURE);
+    }
+
+    indptr.push_back(0);
+    indptr.push_back(indptr[indptr.size()-1] + idx + NR_NON_TIMEGAP_ELMNT);
+
+    /** rehit prediction */
+    indptr.clear(); 
+    indices.clear(); 
+    data.clear(); 
+    result.clear(); 
+    /** predicting rehit probability::end */
+
     if(!(LFO::train_seq%LFO::windowSize)) {
         uint64_t cacheAvailBytes0 = getSize();
         LFO::calculateOPT(cacheAvailBytes0);
