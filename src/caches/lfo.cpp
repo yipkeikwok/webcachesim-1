@@ -161,124 +161,132 @@ bool LFOCache::lookup(SimpleRequest& req)
     /** TESTING_CODE::end */
 
     if(!LFO::init) {
-    /** TESTING_CODE::beginning */
-    /** 
-    int64_t out_len; 
-    char out_str[1024*1024]; 
-    int return_BDM = LGBM_BoosterDumpModel(
-        LFO::booster, 
-        0, 
-        1, 
-        // 0, //C_API_FEATURE_IMPORTANCE_SPLIT
-        (int64_t) 1024*1024,
-        &out_len, 
-        out_str
-        );
-    if(return_BDM==0) {
-        std::cerr<<"out_len= "<<out_len<<std::endl;
-        std::cerr<<"out_str= "<<out_str<<std::endl;
-        std::exit(2);
-    } else {
-        std::cerr<<"DumpModel() error;"<<std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-    */
-    /** TESTING_CODE::end */
-    indptr.clear(); 
-    indices.clear(); 
-    data.clear(); 
+        /** TESTING_CODE::beginning */
+        /** 
+        int64_t out_len; 
+        char out_str[1024*1024]; 
+        int return_BDM = LGBM_BoosterDumpModel(
+            LFO::booster, 
+            0, 
+            1, 
+            // 0, //C_API_FEATURE_IMPORTANCE_SPLIT
+            (int64_t) 1024*1024,
+            &out_len, 
+            out_str
+            );
+        if(return_BDM==0) {
+            std::cerr<<"out_len= "<<out_len<<std::endl;
+            std::cerr<<"out_str= "<<out_str<<std::endl;
+            std::exit(2);
+        } else {
+            std::cerr<<"DumpModel() error;"<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        */
+        /** TESTING_CODE::end */
+        indptr.clear(); 
+        indices.clear(); 
+        data.clear(); 
 
-    indptr.push_back(0);
-    indptr.push_back(53);
-    for(int i20200807=0; i20200807<53; i20200807++) { 
-        indices.push_back(i20200807);
-    }
-    for(int i20200807=0; i20200807<50; i20200807++) { 
-        if(i20200807%2) 
-            data.push_back((double)3);
-        else
-            data.push_back((double)5);
-    }
-    // add object size
-    data[0]=(double)-7;
-    data.push_back(std::round(100*std::log2(req._size)));
-    // available cache space
-    uint64_t cacheAvailBytes = getSize();
-    double currentSize = cacheAvailBytes <= 0 ? 0 :
-        std::round(100*std::log2(cacheAvailBytes));
-    data.push_back(std::round(100*std::log2(currentSize)));
-    // cost
-    data.push_back((double)1);
+        indptr.push_back(0);
+        indptr.push_back(53);
+        for(int i20200807=0; i20200807<53; i20200807++) { 
+            indices.push_back(i20200807);
+        }
+        for(int i20200807=0; i20200807<50; i20200807++) { 
+            if(i20200807%2) 
+                data.push_back((double)3);
+            else
+                data.push_back((double)5);
+        }
+        // add object size
+        data[0]=(double)-7;
+        data.push_back(std::round(100*std::log2(req._size)));
+        // available cache space
+        uint64_t cacheAvailBytes = getSize();
+        double currentSize = cacheAvailBytes <= 0 ? 0 :
+            std::round(100*std::log2(cacheAvailBytes));
+        data.push_back(std::round(100*std::log2(currentSize)));
+        // cost
+        if(LFO::objective==LFO::OHR) 
+            data.push_back((double)1);
+        else if(LFO::objective==LFO::BHR)
+            data.push_back((double)req._size); 
+        else {
+            std::cerr<<"Invalid LFO::objective " << LFO::objective <<std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
 
-    /** TESTING_CODE::beginning */
-    #if 0
-    std::cerr
+        /** TESTING_CODE::beginning */
+        #if 0
+        std::cerr
         << "before LGBM_BoosterPredictForCSR(): "
         << indptr.size() << " " 
         << indices.size() << " " 
         << data.size() 
         << std::endl; 
-    std::cerr<<"indptr: ";
-    for(int iter0=0; iter0<indptr.size(); iter0++) 
-        std::cerr<<indptr[iter0];
-    std::cerr<<std::endl;
-    std::cerr<<"indices: ";
-    for(int iter0=0; iter0<4; iter0++) 
-        std::cerr<<indices[iter0]<<" ";
-    std::cerr<<std::endl;
-    for(int iter0=indices.size()-5; iter0<indices.size(); iter0++) 
-        std::cerr<<indices[iter0]<<" ";
-    std::cerr<<std::endl;
-    std::cerr<<"data: ";
-    for(int iter0=0; iter0<4; iter0++) 
-        std::cerr<<data[iter0]<<" ";
-    std::cerr<<std::endl;
-    for(int iter0=data.size()-5; iter0<data.size(); iter0++) 
-        std::cerr<<data[iter0]<<" ";
-    std::cerr<<std::endl;
-    #endif
-    /** TESTING_CODE::end */
-    // so that result.data() does not return nullptr 
-    result.reserve((size_t)4); 
-    int return_LGBM_BPFC= LGBM_BoosterPredictForCSR(
-            LFO::booster, 
-            static_cast<void *>(indptr.data()), 
-            C_API_DTYPE_INT32, 
-            indices.data(),
-            static_cast<void *>(data.data()), 
-            C_API_DTYPE_FLOAT64,
-            indptr.size(), 
-            data.size(), 
-            data.size(), //since only 1 row HISTFEATURES + NR_NON_TIMEGAP_ELMNT,
-            C_API_PREDICT_NORMAL, 
-            0, 
-            LFO::trainParams, 
-            &len_result, 
-            result.data()
-            );
-    if(return_LGBM_BPFC == 0) { 
-        // predication succeeded 
-        std::cerr
-            << "after LGBM_BoosterPredictForCSR(): "
-            << len_result << " "
-            << result.size() 
-            << std::endl;
-    } else if (return_LGBM_BPFC == -1) {
-        //return value not 0
-        std::cerr<<"prediction failed"<<std::endl; 
-        std::exit(EXIT_FAILURE);
-    } else {
-        std::cerr<<"invalid LGBM_BoosterPredictForCSR return value: " 
-            << return_LGBM_BPFC << std::endl; 
-        std::exit(EXIT_FAILURE);
-    }
+        std::cerr<<"indptr: ";
+        for(int iter0=0; iter0<indptr.size(); iter0++) 
+            std::cerr<<indptr[iter0];
+        std::cerr<<std::endl;
+        std::cerr<<"indices: ";
+        for(int iter0=0; iter0<4; iter0++) 
+            std::cerr<<indices[iter0]<<" ";
+        std::cerr<<std::endl;
+        for(int iter0=indices.size()-5; iter0<indices.size(); iter0++) 
+            std::cerr<<indices[iter0]<<" ";
+        std::cerr<<std::endl;
+        std::cerr<<"data: ";
+        for(int iter0=0; iter0<4; iter0++) 
+            std::cerr<<data[iter0]<<" ";
+        std::cerr<<std::endl;
+        for(int iter0=data.size()-5; iter0<data.size(); iter0++) 
+            std::cerr<<data[iter0]<<" ";
+        std::cerr<<std::endl;
+        #endif
+        /** TESTING_CODE::end */
+        // so that result.data() does not return nullptr 
+        result.reserve((size_t)4); 
+        int return_LGBM_BPFC= LGBM_BoosterPredictForCSR(
+                LFO::booster, 
+                static_cast<void *>(indptr.data()), 
+                C_API_DTYPE_INT32, 
+                indices.data(),
+                static_cast<void *>(data.data()), 
+                C_API_DTYPE_FLOAT64,
+                indptr.size(), 
+                data.size(), 
+                C_API_PREDICT_NORMAL, 
+                //since only 1 row HISTFEATURES + NR_NON_TIMEGAP_ELMNT,
+                data.size(), 
+                0, 
+                LFO::trainParams, 
+                &len_result, 
+                result.data()
+                );
+        if(return_LGBM_BPFC == 0) { 
+            // predication succeeded 
+            std::cerr
+                << "after LGBM_BoosterPredictForCSR(): "
+                << len_result << " "
+                << result.size() 
+                << std::endl;
+        } else if (return_LGBM_BPFC == -1) {
+            //return value not 0
+            std::cerr<<"prediction failed"<<std::endl; 
+            std::exit(EXIT_FAILURE);
+        } else {
+            std::cerr<<"invalid LGBM_BoosterPredictForCSR return value: " 
+                << return_LGBM_BPFC << std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
         std::cerr<<"len_result= "<<len_result<< ", "<<result.data()
             <<", result[0]= "<<result[0] 
             <<", result.size()= "<<result.size()
             <<", result.capacity()= "<<result.capacity()
             <<std::endl;
         std::exit(2);
-    }
+    } // if(!LFO::init) {
 
     indptr.clear(); 
     indices.clear(); 
