@@ -50,6 +50,17 @@ namespace LFO {
     int8_t BHR=(int8_t)1; 
     int8_t objective = LFO::OHR; 
 
+    /** TESTING_CODE::cnt_quartile::beginning */
+    // purpose: observe the distribution of rehit_probabilility 
+    //  (i.e., prediction output) 
+    /** 
+    uint64_t cnt_quartile0 = (uint64_t)0;
+    uint64_t cnt_quartile1 = (uint64_t)0;
+    uint64_t cnt_quartile2 = (uint64_t)0;
+    uint64_t cnt_quartile3 = (uint64_t)0;
+    */
+    /** TESTING_CODE::cnt_quartile::end */
+
     //Will be used to obtain a seed for the random number engine
     std::random_device rd;
     //Standard mersenne_twister_engine seeded with rd()

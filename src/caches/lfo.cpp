@@ -81,86 +81,102 @@ bool LFOCache::lookup(SimpleRequest& req)
         std::exit(EXIT_FAILURE);
     }
 
-    /** predicting rehit probability::beginning */
-    /** obtain shift time-invariant time gaps */
-    std::vector<int32_t> indptr; 
-    std::vector<int32_t> indices; 
-    std::vector<double>  data; 
-    std::vector<double>  result;
-    int64_t              len_result;
-    
-    if(LFO::statistics.count(req._id) == 0) {
-        std:cerr<<"access timestamp of Object " << req._id 
-            << " not exist in LFO::statisics" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-    // curQueue stores the access timestamps in descending order 
-    //  i.e., latest first
-    //  The timstamps are offset to the beginning of each sliding window 
-    //  See deriveFeatures() 
-    std::list<uint64_t>& curQueue = LFO::statistics[req._id];
-    int32_t idx = 0; 
-    uint64_t lastReqTime = (LFO::train_seq - 1)%LFO::windowSize; 
-    for(auto &lit: curQueue) {
-        const uint64_t dist = lastReqTime - lit; 
-        indices.push_back(idx); 
-        data.push_back(dist);
-        idx++;
-        lastReqTime = lit;
-    }
-    // object size
-    indices.push_back(HISTFEATURES); 
-    data.push_back(std::round(100*std::log2(req._size))); 
-    // available cache space
-    indices.push_back(HISTFEATURES+1); 
-    uint64_t cacheAvailBytes = getSize(); 
-    double currentSize = cacheAvailBytes <= 0 ? 0 : 
-        std::round(100*std::log2(cacheAvailBytes));
-    data.push_back(std::round(100*std::log2(currentSize))); 
-    // cost 
-    indices.push_back(HISTFEATURES+2);
-    /** TESTING_CODE::beginning */
-    if((LFO::objective != LFO::OHR) && (LFO::objective != LFO::BHR)) {
-        std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
-        std::exit(EXIT_FAILURE);
-    }
-    /** 
-    if((LFO::objective == LFO::OHR) && (req._cost!=1)) {
-        std::cerr<<"Invalid req cost for OHR: " << req._cost << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-    if((LFO::objective == LFO::BHR) && (req._cost!=req._size)) {
-        std::cerr<<"Invalid req cost for BHR: " << req._cost << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-    */
-    /** TESTING_CODE::end */
-    if(LFO::objective == LFO::OHR) 
-        data.push_back((double)1); 
-    else if(LFO::objective == LFO::BHR) 
-        data.push_back((double)req._size); 
-    else {
-        std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
-        std::exit(EXIT_FAILURE);
-    }
+    bool to_cache=true;
+    if(LFO::init) {
+        //LRU
+        uint64_t & obj = req._id;
+        auto it = _cacheMap.find(obj);
+        if (it != _cacheMap.end()) {
+            // log hit
+            auto & size = _size_map[obj];
+            LOG("h", 0, obj.id, obj.size);
+            hit(it, size);
+            to_cache = true;
+        } else {
+            // log miss
+            to_cache = false;
+        }
+    } else {
+        //LFO
+        /** predicting rehit probability::beginning */
+        /** obtain shift time-invariant time gaps */
+        std::vector<int32_t> indptr; 
+        std::vector<int32_t> indices; 
+        std::vector<double>  data; 
+        std::vector<double>  result;
+        int64_t              len_result;
+        
+        if(LFO::statistics.count(req._id) == 0) {
+            std:cerr<<"access timestamp of Object " << req._id 
+                << " not exist in LFO::statisics" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        // curQueue stores the access timestamps in descending order 
+        //  i.e., latest first
+        //  The timstamps are offset to the beginning of each sliding window 
+        //  See deriveFeatures() 
+        std::list<uint64_t>& curQueue = LFO::statistics[req._id];
+        int32_t idx = 0; 
+        uint64_t lastReqTime = (LFO::train_seq - 1)%LFO::windowSize; 
+        for(auto &lit: curQueue) {
+            const uint64_t dist = lastReqTime - lit; 
+            indices.push_back(idx); 
+            data.push_back(dist);
+            idx++;
+            lastReqTime = lit;
+        }
+        // object size
+        indices.push_back(HISTFEATURES); 
+        data.push_back(std::round(100*std::log2(req._size))); 
+        // available cache space
+        indices.push_back(HISTFEATURES+1); 
+        uint64_t cacheAvailBytes = getSize(); 
+        double currentSize = cacheAvailBytes <= 0 ? 0 : 
+            std::round(100*std::log2(cacheAvailBytes));
+        data.push_back(std::round(100*std::log2(currentSize))); 
+        // cost 
+        indices.push_back(HISTFEATURES+2);
+        /** TESTING_CODE::beginning */
+        if((LFO::objective != LFO::OHR) && (LFO::objective != LFO::BHR)) {
+            std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
+        /** 
+        if((LFO::objective == LFO::OHR) && (req._cost!=1)) {
+            std::cerr<<"Invalid req cost for OHR: " << req._cost << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        if((LFO::objective == LFO::BHR) && (req._cost!=req._size)) {
+            std::cerr<<"Invalid req cost for BHR: " << req._cost << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        */
+        /** TESTING_CODE::end */
+        if(LFO::objective == LFO::OHR) 
+            data.push_back((double)1); 
+        else if(LFO::objective == LFO::BHR) 
+            data.push_back((double)req._size); 
+        else {
+            std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
 
-    indptr.push_back(0);
-    indptr.push_back(indptr[indptr.size()-1] + idx + NR_NON_TIMEGAP_ELMNT);
+        indptr.push_back(0);
+        indptr.push_back(indptr[indptr.size()-1] + idx + NR_NON_TIMEGAP_ELMNT);
 
-    /** rehit prediction */
-    /** TESTING_CODE::beginning */
-    /**
-    std::cerr<<"PREDICTION "
-        << "id= " << req._id << " "
-        << "nr_acesses= " << LFO::statistics[req._id].size() << " " 
-        << indptr.size() << " " 
-        << indices.size() << " " 
-        << data.size() << " " 
-        << std::endl;
-    */
-    /** TESTING_CODE::end */
+        /** rehit prediction */
+        /** TESTING_CODE::beginning */
+        /**
+        std::cerr<<"PREDICTION "
+            << "id= " << req._id << " "
+            << "nr_acesses= " << LFO::statistics[req._id].size() << " " 
+            << indptr.size() << " " 
+            << indices.size() << " " 
+            << data.size() << " " 
+            << std::endl;
+        */
+        /** TESTING_CODE::end */
 
-    if(!LFO::init) {
         /** TESTING_CODE::beginning */
         /** 
         int64_t out_len; 
@@ -184,6 +200,8 @@ bool LFOCache::lookup(SimpleRequest& req)
         }
         */
         /** TESTING_CODE::end */
+        /** TESTING_CODE-20200814a::beginning */
+        #if 0
         indptr.clear(); 
         indices.clear(); 
         data.clear(); 
@@ -216,6 +234,8 @@ bool LFOCache::lookup(SimpleRequest& req)
             std::cerr<<"Invalid LFO::objective " << LFO::objective <<std::endl; 
             std::exit(EXIT_FAILURE);
         }
+        #endif
+        /** TESTING_CODE-20200814a::end */
 
         /** TESTING_CODE::beginning */
         #if 0
@@ -266,11 +286,35 @@ bool LFOCache::lookup(SimpleRequest& req)
                 );
         if(return_LGBM_BPFC == 0) { 
             // predication succeeded 
+            /** TESTING_CODE:: beginning */
+            /** 
             std::cerr
                 << "after LGBM_BoosterPredictForCSR(): "
                 << len_result << " "
                 << result.size() 
                 << std::endl;
+            */
+            /** TESTING_CODE::cnt_quartile::beginning */
+            #if 0
+            if(result[0]<(double)0.0) {
+                std::cerr<<"result[0]= "<<result[0]<<"<0"<<std::endl;
+                std::exit(EXIT_FAILURE);
+            } else if(result[0]<(double).25) {
+                LFO::cnt_quartile0++;
+            } else if(result[0]<(double).50) {
+                LFO::cnt_quartile1++;
+            } else if(result[0]<(double).75) {
+                LFO::cnt_quartile2++;
+            } else if(result[0]<=(double)1.0) {
+                LFO::cnt_quartile3++;
+            } else {
+                std::cerr<<"result[0]= "<<result[0]<<" out of range"<<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            #endif
+            /** TESTING_CODE::cnt_quartile::end */
+    
+            /** TESTING_CODE::end */
         } else if (return_LGBM_BPFC == -1) {
             //return value not 0
             std::cerr<<"prediction failed"<<std::endl; 
@@ -280,21 +324,33 @@ bool LFOCache::lookup(SimpleRequest& req)
                 << return_LGBM_BPFC << std::endl; 
             std::exit(EXIT_FAILURE);
         }
+        #if 0
         std::cerr<<"len_result= "<<len_result<< ", "<<result.data()
             <<", result[0]= "<<result[0] 
+            /** 
+            Normal for result.size()=0 because the result is not added using 
+            any function in std::vector
+            Note: datatype of result is std::vector
+            */
             <<", result.size()= "<<result.size()
             <<", result.capacity()= "<<result.capacity()
             <<std::endl;
-        std::exit(2);
-    } // if(!LFO::init) {
+        // std::exit(2);
+        #endif
 
-    indptr.clear(); 
-    indices.clear(); 
-    data.clear(); 
-    result.clear(); 
-    /** predicting rehit probability::end */
+        indptr.clear(); 
+        indices.clear(); 
+        data.clear(); 
+        result.clear(); 
+        /** predicting rehit probability::end */
+    }
 
     if(!(LFO::train_seq%LFO::windowSize)) {
+        if(LFO::init) 
+            std::cerr<<"LFO::init == true"<<std::endl;
+        else
+            std::cerr<<"LFO::init == false"<<std::endl;
+
         uint64_t cacheAvailBytes0 = getSize();
         LFO::calculateOPT(cacheAvailBytes0);
 
@@ -389,18 +445,29 @@ bool LFOCache::lookup(SimpleRequest& req)
         LFO::windowLastSeen.clear();
         LFO::windowOpt.clear();
         LFO::windowTrace.clear();
+
+        LFO::init = false; 
+
+        /** TESTING_CODE::cnt_quartile::beginning */
+        /** 
+        std::cerr
+            <<"LFO::cnt_quartile= "
+            <<LFO::cnt_quartile0<<" "
+            <<LFO::cnt_quartile1<<" "
+            <<LFO::cnt_quartile2<<" "
+            <<LFO::cnt_quartile3<<" "
+            <<std::endl;
+
+        LFO::cnt_quartile0
+            =LFO::cnt_quartile1
+            =LFO::cnt_quartile2
+            =LFO::cnt_quartile3
+            =(uint64_t)0;
+        */
+        /** TESTING_CODE::cnt_quartile::end */
     }
 
-    uint64_t & obj = req._id;
-    auto it = _cacheMap.find(obj);
-    if (it != _cacheMap.end()) {
-        // log hit
-        auto & size = _size_map[obj];
-        LOG("h", 0, obj.id, obj.size);
-        hit(it, size);
-        return true;
-    }
-    return false;
+    return to_cache;
 }
 
 void LFOCache::admit(SimpleRequest& req)
@@ -806,7 +873,6 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 break;
             }
         }
-        LFO::init = false;
     } else {
         /** TESTING_CODE::beginning */
         /**
