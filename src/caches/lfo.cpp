@@ -81,22 +81,274 @@ bool LFOCache::lookup(SimpleRequest& req)
         std::exit(EXIT_FAILURE);
     }
 
-    bool to_cache=true;
-    if(LFO::init) {
-        //LRU
-        uint64_t & obj = req._id;
-        auto it = _cacheMap.find(obj);
-        if (it != _cacheMap.end()) {
-            // log hit
-            auto & size = _size_map[obj];
-            LOG("h", 0, obj.id, obj.size);
-            hit(it, size);
-            to_cache = true;
-        } else {
-            // log miss
-            to_cache = false;
-        }
+    bool in_cache=true;
+    uint64_t & obj = req._id;
+    auto it = _cacheMap.find(obj);
+    if (it != _cacheMap.end()) {
+        // log hit
+        auto & size = _size_map[obj];
+        LOG("h", 0, obj.id, obj.size);
+        hit(it, size);
+        in_cache = true;
     } else {
+        // log miss
+        in_cache = false;
+    }
+
+    if(!(LFO::train_seq%LFO::windowSize)) {
+        if(LFO::init) 
+            std::cerr<<"LFO::init == true"<<std::endl;
+        else
+            std::cerr<<"LFO::init == false"<<std::endl;
+
+        uint64_t cacheAvailBytes0 = getSize();
+        LFO::calculateOPT(cacheAvailBytes0);
+
+        /** 
+        // TESTING CODE
+        // purpose: make sure that access timestamps during the latest 
+        //  window of each object are stored in statistics[object ID]
+        std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
+        const auto it = LFO::statistics.cbegin();
+        std::list<uint64_t> list0 = it->second;
+
+        bool flag0=true; 
+        uint32_t count0;
+        count0=(uint32_t)0;
+        for(const auto& it : LFO::statistics) {
+            std::list listAccessTimestamps = it.second;
+            if(listAccessTimestamps.size() > 1) {
+                flag0=false;
+                count0++;
+            }
+        }
+        if(flag0) {
+            std::cerr<<"only 1 element on each list"<<std::endl;
+        } else {
+            std::cerr<<count0<<" lists have >=1 elements"<<std::endl;
+        }
+        */
+
+        std::vector<float> labels;
+        std::vector<int32_t> indptr;
+        std::vector<int32_t> indices;
+        std::vector<double> data;
+        uint64_t cacheAvailBytes1 = getSize();
+   
+        /** TESTING_CODE::beginning */
+        if(cacheAvailBytes0 != cacheAvailBytes1) {
+            std::cerr
+                <<"cacheAvailBytes0 = "<<cacheAvailBytes0<<", "
+                <<"cacheAvailBytes1 = "<<cacheAvailBytes1<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        /** TESTING_CODE::end */
+        LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
+            // getSize());
+            cacheAvailBytes1);
+
+        /** TESTING_CODE::beginning */
+        /** 
+        // assert("labels.size()==LFO::windowTrace.size()");
+        if(labels.size()!=LFO::windowTrace.size()) {
+            std::cerr<<"labels.size()!=LFO::windowTrace.size()"<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        // assert("indptr.size()==LFO::windowTrace.size()+1");
+        if(indptr.size()!=(1+LFO::windowTrace.size())) {
+            std::cerr<<"indptr.size()!=1+LFO::windowTrace.size()"<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        uint64_t expected_indices_size = (uint64_t)0;
+        for(auto const it: LFO::windowTrace) {
+            expected_indices_size += LFO::statistics[it.id].size();
+            expected_indices_size += (uint64_t)NR_NON_TIMEGAP_ELMNT;
+        }
+        if(indices.size()!=expected_indices_size) {
+            std::cerr
+                <<"indices.size()!=expected_indices_size"<<": "
+                <<"indices.size() = "<<indices.size()<<", "
+                <<"expected_indices_size = "<< expected_indices_size << ", "
+                <<"windowTrace.size() = "<< LFO::windowTrace.size()
+                <<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        std::cerr<<"lookup(): indices.size()= "<<indices.size()<<std::endl;
+        if(indices.size()!=data.size()) {
+            std::cerr
+                <<"indices.size()!=data.size()"<<": "
+                <<"indices.size() = "<<indices.size()<<", "
+                <<"data.size() = "<< data.size()
+                <<std::endl;
+        }
+        */
+        /** TESTING_CODE::end */
+        LFO::trainModel(labels, indptr, indices, data);
+        labels.clear();
+        indptr.clear();
+        indices.clear();
+        data.clear();
+
+        LFO::statistics.clear();
+        LFO::windowLastSeen.clear();
+        LFO::windowOpt.clear();
+        LFO::windowTrace.clear();
+
+        LFO::init = false; 
+
+        /** TESTING_CODE::cnt_quartile::beginning */
+        /** 
+        std::cerr
+            <<"LFO::cnt_quartile= "
+            <<LFO::cnt_quartile0<<" "
+            <<LFO::cnt_quartile1<<" "
+            <<LFO::cnt_quartile2<<" "
+            <<LFO::cnt_quartile3<<" "
+            <<std::endl;
+
+        LFO::cnt_quartile0
+            =LFO::cnt_quartile1
+            =LFO::cnt_quartile2
+            =LFO::cnt_quartile3
+            =(uint64_t)0;
+        */
+        /** TESTING_CODE::cnt_quartile::end */
+    }
+
+    return in_cache;
+}
+
+void LFOCache::admit(SimpleRequest& req)
+{
+    const uint64_t size = req.get_size();
+    // object feasible to store?
+    if (size > _cacheSize) {
+        LOG("L", _cacheSize, req._id, size);
+        return;
+    }
+    // check eviction needed
+    while (_currentSize + size > _cacheSize) {
+        evict();
+    }
+    // admit new object
+    uint64_t & obj = req._id;
+    _cacheList.push_front(obj);
+    _cacheMap[obj] = _cacheList.begin();
+    _currentSize += size;
+    _size_map[obj] = size;
+    LOG("a", _currentSize, obj.id, obj.size);
+}
+
+void LFOCache::evict(SimpleRequest& req)
+{
+    uint64_t & obj = req._id;
+    auto it = _cacheMap.find(obj);
+    if (it != _cacheMap.end()) {
+        ListIteratorType lit = it->second;
+        LOG("e", _currentSize, obj.id, obj.size);
+        auto & size = _size_map[obj];
+        _currentSize -= size;
+        _size_map.erase(obj);
+        _cacheMap.erase(obj);
+        _cacheList.erase(lit);
+    }
+}
+
+void LFOCache::evict()
+{
+    // evict least popular (i.e. last element)
+    if (_cacheList.size() > 0) {
+        ListIteratorType lit = _cacheList.end();
+        lit--;
+        uint64_t obj = *lit;
+
+
+#ifdef EVICTION_LOGGING
+        {
+            auto it = future_timestamps.find(obj);
+            unsigned int decision_qulity =
+                    static_cast<double>(it->second - current_t) / (_cacheSize * 1e6 / byte_million_req);
+            decision_qulity = min((unsigned int) 255, decision_qulity);
+            eviction_qualities.emplace_back(decision_qulity);
+            eviction_logic_timestamps.emplace_back(current_t / 65536);
+        }
+#endif
+
+        LOG("e", _currentSize, obj.id, obj.size);
+        auto & size = _size_map[obj];
+        _currentSize -= size;
+        _size_map.erase(obj);
+        _cacheMap.erase(obj);
+        _cacheList.erase(lit);
+    }
+}
+
+void LFOCache::hit(lfoCacheMapType::const_iterator it, uint64_t size)
+{
+    _cacheList.splice(_cacheList.begin(), _cacheList, it->second);
+}
+
+const SimpleRequest & LFOCache::evict_return()
+{
+    // evict least popular (i.e. last element)
+    ListIteratorType lit = _cacheList.end();
+    lit--;
+    uint64_t obj = *lit;
+    auto size = _size_map[obj];
+    LOG("e", _currentSize, obj, size);
+    SimpleRequest req(obj, size);
+    _currentSize -= size;
+    _size_map.erase(obj);
+    _cacheMap.erase(obj);
+    _cacheList.erase(lit);
+    return req;
+}
+
+bool LFOCache::exist(const KeyT &key) {
+    return _cacheMap.find(key) != _cacheMap.end();
+}
+
+void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
+    /** TESTING_CODE::end */
+    /**
+    if(!(seq % LFO::windowSize)) {
+        std::cerr<<"End Window"<<(seq/LFO::windowSize-1)<<std::endl; 
+    }
+    */
+    /** TESTING_CODE::end */
+
+    const uint64_t idx= (seq-1) % LFO::windowSize; 
+    // store access timestamps
+    if(LFO::statistics.count(id)) {
+        std::list<uint64_t>& list0=LFO::statistics[id];
+        list0.push_front(idx);
+        if(list0.size() > HISTFEATURES) 
+            list0.pop_back();
+    } else {
+        // first time this object is accessed in this sliding window 
+        std::list<uint64_t> list0;
+        list0.push_front(id);
+        LFO::statistics[id]=list0;
+    }
+    const auto idsize = std::make_pair(id, size); 
+    if(LFO::windowLastSeen.count(idsize)>0) {
+        LFO::windowOpt[LFO::windowLastSeen[idsize]].hasNext = true;
+        LFO::windowOpt[LFO::windowLastSeen[idsize]].volume = (idx - 
+           LFO::windowLastSeen[idsize]) * size;
+    }
+    LFO::windowByteSum += size;
+    LFO::windowLastSeen[idsize]=idx;
+    LFO::windowOpt.emplace_back(idx); 
+    LFO::windowTrace.emplace_back(id, size, cost);
+
+    return; 
+}
+
+double LFO::calculate_rehit_probability(
+        SimpleRequest& req, 
+        uint64_t cacheAvailBytes) {
         //LFO
         /** predicting rehit probability::beginning */
         /** obtain shift time-invariant time gaps */
@@ -130,7 +382,6 @@ bool LFOCache::lookup(SimpleRequest& req)
         data.push_back(std::round(100*std::log2(req._size))); 
         // available cache space
         indices.push_back(HISTFEATURES+1); 
-        uint64_t cacheAvailBytes = getSize(); 
         double currentSize = cacheAvailBytes <= 0 ? 0 : 
             std::round(100*std::log2(cacheAvailBytes));
         data.push_back(std::round(100*std::log2(currentSize))); 
@@ -343,257 +594,6 @@ bool LFOCache::lookup(SimpleRequest& req)
         data.clear(); 
         result.clear(); 
         /** predicting rehit probability::end */
-    }
-
-    if(!(LFO::train_seq%LFO::windowSize)) {
-        if(LFO::init) 
-            std::cerr<<"LFO::init == true"<<std::endl;
-        else
-            std::cerr<<"LFO::init == false"<<std::endl;
-
-        uint64_t cacheAvailBytes0 = getSize();
-        LFO::calculateOPT(cacheAvailBytes0);
-
-        /** 
-        // TESTING CODE
-        // purpose: make sure that access timestamps during the latest 
-        //  window of each object are stored in statistics[object ID]
-        std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
-        const auto it = LFO::statistics.cbegin();
-        std::list<uint64_t> list0 = it->second;
-
-        bool flag0=true; 
-        uint32_t count0;
-        count0=(uint32_t)0;
-        for(const auto& it : LFO::statistics) {
-            std::list listAccessTimestamps = it.second;
-            if(listAccessTimestamps.size() > 1) {
-                flag0=false;
-                count0++;
-            }
-        }
-        if(flag0) {
-            std::cerr<<"only 1 element on each list"<<std::endl;
-        } else {
-            std::cerr<<count0<<" lists have >=1 elements"<<std::endl;
-        }
-        */
-
-        std::vector<float> labels;
-        std::vector<int32_t> indptr;
-        std::vector<int32_t> indices;
-        std::vector<double> data;
-        uint64_t cacheAvailBytes1 = getSize();
-   
-        /** TESTING_CODE::beginning */
-        if(cacheAvailBytes0 != cacheAvailBytes1) {
-            std::cerr
-                <<"cacheAvailBytes0 = "<<cacheAvailBytes0<<", "
-                <<"cacheAvailBytes1 = "<<cacheAvailBytes1<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        /** TESTING_CODE::end */
-        LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
-            // getSize());
-            cacheAvailBytes1);
-
-        /** TESTING_CODE::beginning */
-        /** 
-        // assert("labels.size()==LFO::windowTrace.size()");
-        if(labels.size()!=LFO::windowTrace.size()) {
-            std::cerr<<"labels.size()!=LFO::windowTrace.size()"<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // assert("indptr.size()==LFO::windowTrace.size()+1");
-        if(indptr.size()!=(1+LFO::windowTrace.size())) {
-            std::cerr<<"indptr.size()!=1+LFO::windowTrace.size()"<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        uint64_t expected_indices_size = (uint64_t)0;
-        for(auto const it: LFO::windowTrace) {
-            expected_indices_size += LFO::statistics[it.id].size();
-            expected_indices_size += (uint64_t)NR_NON_TIMEGAP_ELMNT;
-        }
-        if(indices.size()!=expected_indices_size) {
-            std::cerr
-                <<"indices.size()!=expected_indices_size"<<": "
-                <<"indices.size() = "<<indices.size()<<", "
-                <<"expected_indices_size = "<< expected_indices_size << ", "
-                <<"windowTrace.size() = "<< LFO::windowTrace.size()
-                <<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        std::cerr<<"lookup(): indices.size()= "<<indices.size()<<std::endl;
-        if(indices.size()!=data.size()) {
-            std::cerr
-                <<"indices.size()!=data.size()"<<": "
-                <<"indices.size() = "<<indices.size()<<", "
-                <<"data.size() = "<< data.size()
-                <<std::endl;
-        }
-        */
-        /** TESTING_CODE::end */
-        LFO::trainModel(labels, indptr, indices, data);
-        labels.clear();
-        indptr.clear();
-        indices.clear();
-        data.clear();
-
-        LFO::statistics.clear();
-        LFO::windowLastSeen.clear();
-        LFO::windowOpt.clear();
-        LFO::windowTrace.clear();
-
-        LFO::init = false; 
-
-        /** TESTING_CODE::cnt_quartile::beginning */
-        /** 
-        std::cerr
-            <<"LFO::cnt_quartile= "
-            <<LFO::cnt_quartile0<<" "
-            <<LFO::cnt_quartile1<<" "
-            <<LFO::cnt_quartile2<<" "
-            <<LFO::cnt_quartile3<<" "
-            <<std::endl;
-
-        LFO::cnt_quartile0
-            =LFO::cnt_quartile1
-            =LFO::cnt_quartile2
-            =LFO::cnt_quartile3
-            =(uint64_t)0;
-        */
-        /** TESTING_CODE::cnt_quartile::end */
-    }
-
-    return to_cache;
-}
-
-void LFOCache::admit(SimpleRequest& req)
-{
-    const uint64_t size = req.get_size();
-    // object feasible to store?
-    if (size > _cacheSize) {
-        LOG("L", _cacheSize, req._id, size);
-        return;
-    }
-    // check eviction needed
-    while (_currentSize + size > _cacheSize) {
-        evict();
-    }
-    // admit new object
-    uint64_t & obj = req._id;
-    _cacheList.push_front(obj);
-    _cacheMap[obj] = _cacheList.begin();
-    _currentSize += size;
-    _size_map[obj] = size;
-    LOG("a", _currentSize, obj.id, obj.size);
-}
-
-void LFOCache::evict(SimpleRequest& req)
-{
-    uint64_t & obj = req._id;
-    auto it = _cacheMap.find(obj);
-    if (it != _cacheMap.end()) {
-        ListIteratorType lit = it->second;
-        LOG("e", _currentSize, obj.id, obj.size);
-        auto & size = _size_map[obj];
-        _currentSize -= size;
-        _size_map.erase(obj);
-        _cacheMap.erase(obj);
-        _cacheList.erase(lit);
-    }
-}
-
-void LFOCache::evict()
-{
-    // evict least popular (i.e. last element)
-    if (_cacheList.size() > 0) {
-        ListIteratorType lit = _cacheList.end();
-        lit--;
-        uint64_t obj = *lit;
-
-
-#ifdef EVICTION_LOGGING
-        {
-            auto it = future_timestamps.find(obj);
-            unsigned int decision_qulity =
-                    static_cast<double>(it->second - current_t) / (_cacheSize * 1e6 / byte_million_req);
-            decision_qulity = min((unsigned int) 255, decision_qulity);
-            eviction_qualities.emplace_back(decision_qulity);
-            eviction_logic_timestamps.emplace_back(current_t / 65536);
-        }
-#endif
-
-        LOG("e", _currentSize, obj.id, obj.size);
-        auto & size = _size_map[obj];
-        _currentSize -= size;
-        _size_map.erase(obj);
-        _cacheMap.erase(obj);
-        _cacheList.erase(lit);
-    }
-}
-
-void LFOCache::hit(lfoCacheMapType::const_iterator it, uint64_t size)
-{
-    _cacheList.splice(_cacheList.begin(), _cacheList, it->second);
-}
-
-const SimpleRequest & LFOCache::evict_return()
-{
-    // evict least popular (i.e. last element)
-    ListIteratorType lit = _cacheList.end();
-    lit--;
-    uint64_t obj = *lit;
-    auto size = _size_map[obj];
-    LOG("e", _currentSize, obj, size);
-    SimpleRequest req(obj, size);
-    _currentSize -= size;
-    _size_map.erase(obj);
-    _cacheMap.erase(obj);
-    _cacheList.erase(lit);
-    return req;
-}
-
-bool LFOCache::exist(const KeyT &key) {
-    return _cacheMap.find(key) != _cacheMap.end();
-}
-
-void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
-    /** TESTING_CODE::end */
-    /**
-    if(!(seq % LFO::windowSize)) {
-        std::cerr<<"End Window"<<(seq/LFO::windowSize-1)<<std::endl; 
-    }
-    */
-    /** TESTING_CODE::end */
-
-    const uint64_t idx= (seq-1) % LFO::windowSize; 
-    // store access timestamps
-    if(LFO::statistics.count(id)) {
-        std::list<uint64_t>& list0=LFO::statistics[id];
-        list0.push_front(idx);
-        if(list0.size() > HISTFEATURES) 
-            list0.pop_back();
-    } else {
-        // first time this object is accessed in this sliding window 
-        std::list<uint64_t> list0;
-        list0.push_front(id);
-        LFO::statistics[id]=list0;
-    }
-    const auto idsize = std::make_pair(id, size); 
-    if(LFO::windowLastSeen.count(idsize)>0) {
-        LFO::windowOpt[LFO::windowLastSeen[idsize]].hasNext = true;
-        LFO::windowOpt[LFO::windowLastSeen[idsize]].volume = (idx - 
-           LFO::windowLastSeen[idsize]) * size;
-    }
-    LFO::windowByteSum += size;
-    LFO::windowLastSeen[idsize]=idx;
-    LFO::windowOpt.emplace_back(idx); 
-    LFO::windowTrace.emplace_back(id, size, cost);
-
-    return; 
 }
 
 void LFO::calculateOPT(uint64_t cacheSize) {

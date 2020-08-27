@@ -127,6 +127,10 @@ namespace LFO {
     };
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
+    double calculate_rehit_probability(
+        SimpleRequest& req, 
+        uint64_t cacheAvailBytes
+        ); 
     void calculateOPT(uint64_t cacheSize); 
     void deriveFeatures(vector<float> &labels, vector<int32_t> &indptr, 
        vector<int32_t> &indices, vector<double> &data, int sampling, 
