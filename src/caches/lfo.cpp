@@ -1,5 +1,6 @@
 //#include <unordered_map>
 #include <random>
+#include <utility>
 #include <cmath>
 #include <string>
 /**
@@ -83,19 +84,43 @@ bool LFOCache::lookup(SimpleRequest& req)
 
     bool in_cache=true;
     uint64_t & obj = req._id;
-    auto it = _cacheMap.find(obj);
-    if (it != _cacheMap.end()) {
+    auto it = _cacheMap.left.find(
+        std::make_pair((std::uint64_t)req._id, (double)req._size)
+        );
+    if (it != _cacheMap.left.end()) {
         // log hit
         auto & size = _size_map[obj];
-        LOG("h", 0, obj.id, obj.size);
+        /** TESTING_CODE::verifying _size_map::beginning */
+        if(size != req._size) {
+            std::cerr<<"size != req._size"<<size<<" "<<req._size<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        /** TESTING_CODE::verifying _size_map::end */
+        LOG("h", 0, req._id, req._size);
         hit(it, size);
         in_cache = true;
+
+        // evict hit object if rehit_probability <.5
+        double rehit_probability = LFO::calculate_rehit_probability(
+            req, getCurrentSize()
+            );
+        _cacheMap.left.replace_data(it, rehit_probability);
+        if(rehit_probability<(double).5) {
+            // evict hit object
+            evict(req);
+        }
     } else {
         // log miss
         in_cache = false;
     }
 
     if(!(LFO::train_seq%LFO::windowSize)) {
+        /**
+        end-of-sliding window routine
+        - deduce OPT decisions
+        - derive features
+        - train model
+        */
         if(LFO::init) 
             std::cerr<<"LFO::init == true"<<std::endl;
         else
@@ -228,21 +253,48 @@ void LFOCache::admit(SimpleRequest& req)
         LOG("L", _cacheSize, req._id, size);
         return;
     }
+
+    // not admit object if rehit_probability <.5
+    double rehit_probability = LFO::calculate_rehit_probability(
+        req, getCurrentSize()
+        );
+    if(rehit_probability<(double).5) {
+        return;
+    }
+
     // check eviction needed
     while (_currentSize + size > _cacheSize) {
         evict();
     }
     // admit new object
+    /**
     uint64_t & obj = req._id;
     _cacheList.push_front(obj);
     _cacheMap[obj] = _cacheList.begin();
     _currentSize += size;
     _size_map[obj] = size;
     LOG("a", _currentSize, obj.id, obj.size);
+    */
+    _cacheMap.insert(
+        {
+            {req.get_id(), req.get_size()}, 
+            rehit_probability
+        }
+        );
+    _currentSize += size;
+    // make sure that admitted object not already in unordered_map _size_map
+    if(_size_map.find(req._id)!=_size_map.end()) {
+        std::cerr<<"_size_map.find(req._id)!=_size_map.end()"<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    _size_map[req._id] = size;
+    LOG("a", _currentSize, req._id, req._size);
 }
 
 void LFOCache::evict(SimpleRequest& req)
 {
+    /**
+    // TODO: remove LRU code
     uint64_t & obj = req._id;
     auto it = _cacheMap.find(obj);
     if (it != _cacheMap.end()) {
@@ -254,10 +306,22 @@ void LFOCache::evict(SimpleRequest& req)
         _cacheMap.erase(obj);
         _cacheList.erase(lit);
     }
+    */
+    auto it = _cacheMap.left.find(
+        std::make_pair((std::uint64_t)req._id, (double)req._size)
+        );
+    if(it==_cacheMap.left.end()) {
+        std::cerr
+            <<"LFOCache::evict(SimpleRequest& req): evicted object not found"
+            <<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
 }
 
 void LFOCache::evict()
 {
+    #if 0
+    // TODO: rewrite this function for LFOCache
     // evict least popular (i.e. last element)
     if (_cacheList.size() > 0) {
         ListIteratorType lit = _cacheList.end();
@@ -283,13 +347,19 @@ void LFOCache::evict()
         _cacheMap.erase(obj);
         _cacheList.erase(lit);
     }
+    #endif
 }
 
-void LFOCache::hit(lfoCacheMapType::const_iterator it, uint64_t size)
+void LFOCache::hit(lfoCacheMapType::left_map::const_iterator it, uint64_t size)
 {
+    #if 0
+    // TODO: rewrite this function for LFOCache
     _cacheList.splice(_cacheList.begin(), _cacheList, it->second);
+    #endif
 }
 
+#if 0
+// TODO: to remove this function
 const SimpleRequest & LFOCache::evict_return()
 {
     // evict least popular (i.e. last element)
@@ -305,10 +375,13 @@ const SimpleRequest & LFOCache::evict_return()
     _cacheList.erase(lit);
     return req;
 }
+#endif
 
+/** 
 bool LFOCache::exist(const KeyT &key) {
     return _cacheMap.find(key) != _cacheMap.end();
 }
+*/
 
 void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     /** TESTING_CODE::end */

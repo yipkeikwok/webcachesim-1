@@ -2,6 +2,8 @@
 #define LFO_VARIANTS_H
 
 #include <unordered_map>
+#include <boost/bimap.hpp>
+#include <boost/bimap/multiset_of.hpp>
 #include <boost/functional/hash.hpp>
 #include <unordered_set>
 #include <utility>
@@ -14,9 +16,17 @@
 #include "mongocxx/client.hpp"
 #endif
 
+/** 
+TO_REMOVE
 typedef std::list<uint64_t >::iterator ListIteratorType;
 typedef std::unordered_map<uint64_t , ListIteratorType> lfoCacheMapType;
-
+*/
+typedef std::pair<std::uint64_t, double> lfoCacheMapKey_t;
+typedef boost::bimap<
+    boost::bimaps::set_of<lfoCacheMapKey_t>,
+    boost::bimaps::multiset_of<double>
+    > lfoCacheMapType;
+typedef lfoCacheMapType::right_map::const_iterator right_const_iterator;
 
 using namespace std;
 using namespace webcachesim;
@@ -147,8 +157,11 @@ namespace LFO {
 class LFOCache : public Cache
 {
 protected:
+    /** 
+    // TODO: remove LRU code 
     // list for recency order
     std::list<uint64_t > _cacheList;
+    */
     // map to find objects in list
     lfoCacheMapType _cacheMap;
     unordered_map<uint64_t , uint64_t > _size_map;
@@ -216,7 +229,8 @@ protected:
     }
 #endif
 
-    virtual void hit(lfoCacheMapType::const_iterator it, uint64_t size);
+    virtual void hit(lfoCacheMapType::left_map::const_iterator it, 
+        uint64_t size);
 
 public:
     LFOCache()
@@ -229,14 +243,20 @@ public:
 
     bool lookup(SimpleRequest &req) override;
 
+    /**
     bool exist(const KeyT &key) override;
+    */
 
     void admit(SimpleRequest &req) override;
 
     void evict(SimpleRequest &req);
 
     void evict();
+
+    /**
+    // TODO: remove this function
     virtual const SimpleRequest & evict_return();
+    */
 };
 
 static Factory<LFOCache> factoryLFO("LFO");
