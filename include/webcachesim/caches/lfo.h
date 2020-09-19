@@ -229,8 +229,10 @@ protected:
     }
 #endif
 
+/** 
     virtual void hit(lfoCacheMapType::left_map::const_iterator it, 
-        uint64_t size);
+        double rehit_probability);
+*/
 
 public:
     LFOCache()
@@ -251,7 +253,7 @@ public:
 
     void evict(SimpleRequest &req);
 
-    void evict();
+    KeyT evict();
 
     /**
     // TODO: remove this function

@@ -97,17 +97,32 @@ bool LFOCache::lookup(SimpleRequest& req)
         }
         /** TESTING_CODE::verifying _size_map::end */
         LOG("h", 0, req._id, req._size);
-        hit(it, size);
         in_cache = true;
 
         // evict hit object if rehit_probability <.5
         double rehit_probability = LFO::calculate_rehit_probability(
-            req, getCurrentSize()
+            req, getSize()-getCurrentSize()
             );
         _cacheMap.left.replace_data(it, rehit_probability);
+        /** 
+        // hit() is from LRU implementation
+        hit(it, rehit_probability);
+        */
         if(rehit_probability<(double).5) {
             // evict hit object
-            evict(req);
+            KeyT evicted_req_id = evict();
+
+            /** TESTING_CODE::beginning */
+            // Object ID verification: Object ID of accessed and evicted object 
+            //  should be same 
+            if(evicted_req_id != req._id) {
+                std::cerr<<"LFOCache::lookup(): evicted_req_id != req._id, "
+                    << "evicted_req_id= " << evicted_req_id  << ", "
+                    << "req._id= " << req._id
+                    << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            /** TESTING_CODE::end */
         }
     } else {
         // log miss
@@ -126,7 +141,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         else
             std::cerr<<"LFO::init == false"<<std::endl;
 
-        uint64_t cacheAvailBytes0 = getSize();
+        uint64_t cacheAvailBytes0 = getSize()-getCurrentSize();
         LFO::calculateOPT(cacheAvailBytes0);
 
         /** 
@@ -158,7 +173,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         std::vector<int32_t> indptr;
         std::vector<int32_t> indices;
         std::vector<double> data;
-        uint64_t cacheAvailBytes1 = getSize();
+        uint64_t cacheAvailBytes1 = getSize()-getCurrentSize();
    
         /** TESTING_CODE::beginning */
         if(cacheAvailBytes0 != cacheAvailBytes1) {
@@ -169,7 +184,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         }
         /** TESTING_CODE::end */
         LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
-            // getSize());
+            // getSize()-getCurrentSize());
             cacheAvailBytes1);
 
         /** TESTING_CODE::beginning */
@@ -256,7 +271,7 @@ void LFOCache::admit(SimpleRequest& req)
 
     // not admit object if rehit_probability <.5
     double rehit_probability = LFO::calculate_rehit_probability(
-        req, getCurrentSize()
+        req, getSize()-getCurrentSize()
         );
     if(rehit_probability<(double).5) {
         return;
@@ -318,7 +333,7 @@ void LFOCache::evict(SimpleRequest& req)
     }
 }
 
-void LFOCache::evict()
+KeyT LFOCache::evict()
 {
     #if 0
     // TODO: rewrite this function for LFOCache
@@ -348,15 +363,27 @@ void LFOCache::evict()
         _cacheList.erase(lit);
     }
     #endif
+
+    // lfoCacheMapType::right_map::const_iterator right_iter; 
+    // lfoCacheMapType::right_map::const_iterator right_iter; 
+    auto right_iter = _cacheMap.right.begin();
+    KeyT evicted_req_id = right_iter->second.first;
+    _currentSize -= right_iter->second.second;
+    _cacheMap.right.erase(right_iter);
+
+    return evicted_req_id;
 }
 
-void LFOCache::hit(lfoCacheMapType::left_map::const_iterator it, uint64_t size)
+/** 
+void LFOCache::hit(lfoCacheMapType::left_map::const_iterator it, 
+    double rehit_probability)
 {
     #if 0
-    // TODO: rewrite this function for LFOCache
+    // LRU code
     _cacheList.splice(_cacheList.begin(), _cacheList, it->second);
     #endif
 }
+*/
 
 #if 0
 // TODO: to remove this function
@@ -545,7 +572,7 @@ double LFO::calculate_rehit_probability(
         data[0]=(double)-7;
         data.push_back(std::round(100*std::log2(req._size)));
         // available cache space
-        uint64_t cacheAvailBytes = getSize();
+        uint64_t cacheAvailBytes = getSize()-getCurrentSize();
         double currentSize = cacheAvailBytes <= 0 ? 0 :
             std::round(100*std::log2(cacheAvailBytes));
         data.push_back(std::round(100*std::log2(currentSize)));
