@@ -1,8 +1,8 @@
-//#include <unordered_map>
 #include <random>
 #include <utility>
 #include <cmath>
 #include <string>
+#include <unordered_map> // latest_decision
 /**
 // NDEBUG is defined somewhere in this application. I do not know where.
 #include <cassert>
@@ -141,7 +141,12 @@ bool LFOCache::lookup(SimpleRequest& req)
         else
             std::cerr<<"LFO::init == false"<<std::endl;
 
-        uint64_t cacheAvailBytes0 = getSize()-getCurrentSize();
+        /**
+        For LFO::calculateOPT(), available cache size should be the cache 
+        capacity (i.e., total cache space). RSN: LFO's version of OPT makes
+        caching decisions based on the cache capacity, not remaining cache size
+        */
+        uint64_t cacheAvailBytes0 = getSize();
         LFO::calculateOPT(cacheAvailBytes0);
 
         /** 
@@ -185,7 +190,8 @@ bool LFOCache::lookup(SimpleRequest& req)
         /** TESTING_CODE::end */
         LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
             // getSize()-getCurrentSize());
-            cacheAvailBytes1);
+            getSize()
+            );
 
         /** TESTING_CODE::beginning */
         /** 
@@ -764,6 +770,18 @@ void LFO::deriveFeatures(std::vector<float> &labels,
     uint64_t expected_indices_size=(uint64_t)0;
     */
     /** TESTING_CODE::end */
+
+    /** 
+        unordered_map latest_decision stores 
+        the latest caching decision of each object as traversing 
+        windowTrace. 
+        <std::uint64_t ObjectID, bool decision> 
+    */
+    std::unordered_map<std::uint64_t, bool> latest_decision; 
+    /**
+        for calculating remaining cache space at each request in windowTrace
+    */
+    uint64_t remaining_cacheSize = cacheSize;
     for(auto &it: windowTrace) {
         auto &curQueue = statistics[it.id];
         const auto curQueueLen = curQueue.size();
@@ -782,6 +800,15 @@ void LFO::deriveFeatures(std::vector<float> &labels,
         } else if (sampling == 2) {
             // uniform_real_distribution<> dis(0.0, 1.0);
             double rand = LFO::dis(LFO::gen);
+            /** TESTING_CODE::beginning */
+            if(rand < 0.0) {
+                std::cerr<<"invalid: rand= "<<rand<<std::endl;
+                std::exit(EXIT_FAILURE);
+            } else if(rand > 1.0) {
+                std::cerr<<"invalid: rand= "<<rand<<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            /** TESTING_CODE::end */
             flag = rand < (double) sampleSize / windowSize;
         } else {
             std::cerr<<"Invalid sampling type: "<< sampling << std::endl;
@@ -797,7 +824,9 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             int32_t idx = 0;
             uint64_t lastReqTime = i;
 
+            /** TESTING_CODE::INDICES_GROWTH::beginning */
             uint64_t indices_size_old = (uint64_t)indices.size();
+            /** TESTING_CODE::INDICES_GROWTH::end */
 
             //YK: curQueue: feature list of an object 
             for (auto &lit: curQueue) { 
@@ -805,23 +834,83 @@ void LFO::deriveFeatures(std::vector<float> &labels,
                 // YK: std::vector::push_back(): append to the end 
                 indices.push_back(idx);
                 data.push_back(dist);
+
+                /** TESTING_CODE::beginning */
                 if(idx==0) {
-                } else
-                    assert(dist>0.0);
+                } else {
+                    if(!(dist>(uint64_t)0)) {
+                        std::cerr
+                            <<"idx= "<<idx<<": dist= "<<dist<<"<=0"<<std::endl;
+                        std::exit(EXIT_FAILURE);
+                    }
+                }
+                /** TESTING_CODE::end */
                 idx++;
                 lastReqTime = lit;
             }
+            /** TESTING_CODE::INDICES_GROWTH::beginning */
+            uint64_t indices_growth = indices.size()-indices_size_old;
+            if(indices_growth!=(uint64_t)curQueue.size()) {
+                std::cerr<<"TESTING_CODE::INDICES_GROWTH failed"<<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            if(!(indices_growth<=HISTFEATURES)) {
+                std::cerr<<"indices_growth should <= HISTFEATURES"<<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            /** TESTING_CODE::INDICES_GROWTH::end */
 
             // object size
             indices.push_back(HISTFEATURES);
             data.push_back(round(100.0 * log2(it.size)));
 
-            //YK: remaining cache space is a feature. Why did they comment the
-            // code? 
-            double currentSize = cacheAvailBytes <= 0 ? 
-                0 : round(100.0 * log2(cacheAvailBytes));
+            // remaining cache space 
             indices.push_back(HISTFEATURES + 1);
-            data.push_back(currentSize);
+            data.push_back(round(100.0 * log2(remaining_cacheSize)));
+            if(it.toCache) {
+                if(latest_decision.find(it.id)==latest_decision.end()) {
+                    // 1st encounter of the object on windowTrace
+                    remaining_cacheSize -= it.size;
+                } else {
+                    if(latest_decision[it.id]==false) {
+                        // OPT decided to not cache object in latest encounter 
+                        remaining_cacheSize -= it.size;
+                    } else if(latest_decision[it.id]==true) {
+                        // OPT decided to cache object in latest encounter 
+                        //  OPT decides to continue caching the object
+                        //remaining_cacheSize unchanged
+                    } else {
+                        std::cerr<<"undefine latest_decision[], it.id= "
+                            <<it.id<<", latest_decision[]= "
+                            <<latest_decision[it.id]<<std::endl;
+                        std::exit(1);
+                    }
+                }
+            } else if (!it.toCache) {
+                if(latest_decision.find(it.id)==latest_decision.end()) {
+                    // 1st encounter of the object on windowTrace
+                    // remaining_cacheSize unchanged 
+                } else {
+                    if(latest_decision[it.id]==false) {
+                        // OPT decided to not cache object in latest encounter 
+                        // remaining_cacheSize unchanged
+                    } else if(latest_decision[it.id]==true) {
+                        // OPT decided to cache object in latest encounter 
+                        //  OPT decides to not cache the object
+                        remaining_cacheSize += it.size; 
+                    } else {
+                        std::cerr<<"undefine latest_decision[], it.id= "
+                            <<it.id<<", latest_decision[]= "
+                            <<latest_decision[it.id]<<std::endl;
+                        std::exit(1);
+                    }
+                }
+            } else {
+                std::cerr<<"no defined value for it.toCache"<<std::endl;
+                std::exit(1);
+            }
+            latest_decision[it.id]=it.toCache; 
+            // cost
             indices.push_back(HISTFEATURES + 2);
             data.push_back(it.cost);
 
