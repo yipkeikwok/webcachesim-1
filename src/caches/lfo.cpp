@@ -296,12 +296,38 @@ void LFOCache::admit(SimpleRequest& req)
     _size_map[obj] = size;
     LOG("a", _currentSize, obj.id, obj.size);
     */
+    /** TESTING_CODE::make sure admitted object not already cached::beginning*/
+    auto it0 = _cacheMap.left.find(
+        std::make_pair((std::uint64_t)req.get_id(), (double)req.get_size())
+        );
+    if(it0 != _cacheMap.left.end()) {
+        std::cerr<<"LFOCache::admit(): object already cached, req ID= "
+            << req.get_id() << ", size= " << req.get_size() << std::endl; 
+        std::exit(1);
+    }
+    /** TESTING_CODE::make sure admitted object not already cached::end*/
     _cacheMap.insert(
         {
             {req.get_id(), req.get_size()}, 
             rehit_probability
         }
         );
+    /** TESTING_CODE::assert that object admitted successfully::beginning */
+    // This test is COMMENTABLE
+    auto it1 = _cacheMap.left.find(
+        std::make_pair((std::uint64_t)req.get_id(), (double)req.get_size())
+        );
+    if(it1 == _cacheMap.left.end()) {
+        std::cerr<<"LFOCache::admit(): failed to cache admitted object"
+            <<std::endl;
+        std::exit(1);
+    }
+    if(fabs(it1->second - rehit_probability) > 0.001) {
+        std::cerr<<"LFOCache::admit(): rehit_probability not stored correctly" 
+            <<std::endl;
+        std::exit(1);
+    }
+    /** TESTING_CODE::assert that object admitted successfully::end */
     _currentSize += size;
     // make sure that admitted object not already in unordered_map _size_map
     if(_size_map.find(req._id)!=_size_map.end()) {
@@ -376,6 +402,16 @@ KeyT LFOCache::evict()
     KeyT evicted_req_id = right_iter->second.first;
     _currentSize -= right_iter->second.second;
     _cacheMap.right.erase(right_iter);
+
+    /** TESTING_CODE::beginning */
+    // make sure that the cached object with smallest rehit_probability 
+    //  is >=.5 
+    right_iter = _cacheMap.right.begin(); 
+    if(right_iter->first < (double)0.5) {
+        std::cerr<<"LFOCache::evict(): rehit_probability must >= .5"
+            <<std::endl; 
+        std::exit(1);
+    }
 
     return evicted_req_id;
 }
