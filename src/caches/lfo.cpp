@@ -237,6 +237,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         indices.clear();
         data.clear();
 
+        LFO::windowByteSum=(uint64_t)0; 
         LFO::statistics.clear();
         LFO::windowLastSeen.clear();
         LFO::windowOpt.clear();
@@ -338,6 +339,8 @@ void LFOCache::admit(SimpleRequest& req)
     LOG("a", _currentSize, req._id, req._size);
 }
 
+#if 0
+// implementation incomplete
 void LFOCache::evict(SimpleRequest& req)
 {
     /**
@@ -363,7 +366,12 @@ void LFOCache::evict(SimpleRequest& req)
             <<std::endl;
         std::exit(EXIT_FAILURE);
     }
+    LOG("e", _currentSize, req._id, req._size); 
+    auto & size = _size_map[obj];
+    _currentSize -= size;
+    _size_map.erase(obj);
 }
+#endif
 
 KeyT LFOCache::evict()
 {
@@ -401,6 +409,7 @@ KeyT LFOCache::evict()
     auto right_iter = _cacheMap.right.begin();
     KeyT evicted_req_id = right_iter->second.first;
     _currentSize -= right_iter->second.second;
+    _size_map.erase(evicted_req_id);
     _cacheMap.right.erase(right_iter);
 
     /** TESTING_CODE::beginning */
@@ -734,8 +743,11 @@ double LFO::calculate_rehit_probability(
         indptr.clear(); 
         indices.clear(); 
         data.clear(); 
+
+        double rehit_probability = result[0]; 
         result.clear(); 
         /** predicting rehit probability::end */
+        return rehit_probability; 
 }
 
 void LFO::calculateOPT(uint64_t cacheSize) {
