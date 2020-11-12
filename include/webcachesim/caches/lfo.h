@@ -16,11 +16,10 @@
 #include "mongocxx/client.hpp"
 #endif
 
-/** 
-TO_REMOVE
+// for LRU. LRU to be used during 1st window 
 typedef std::list<uint64_t >::iterator ListIteratorType;
-typedef std::unordered_map<uint64_t , ListIteratorType> lfoCacheMapType;
-*/
+// for LRU. LRU to be used during 1st window 
+typedef std::unordered_map<uint64_t , ListIteratorType> lruCacheMapType;
 typedef std::pair<std::uint64_t, double> lfoCacheMapKey_t;
 typedef boost::bimap<
     boost::bimaps::set_of<lfoCacheMapKey_t>,
@@ -157,11 +156,11 @@ namespace LFO {
 class LFOCache : public Cache
 {
 protected:
-    /** 
-    // TODO: remove LRU code 
-    // list for recency order
-    std::list<uint64_t > _cacheList;
-    */
+    // for LRU. LRU to be used during 1st window 
+    // list for LRU recency order
+    std::list<uint64_t > _lruCacheList;
+    // map to find objects in LRU recency list
+    lruCacheMapType _lruCacheMap;
     // map to find objects in list
     lfoCacheMapType _cacheMap;
     unordered_map<uint64_t , uint64_t > _size_map;

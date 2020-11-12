@@ -72,6 +72,25 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 #endif
 
+    if(LFO::init) {
+        uint64_t & obj = req._id;
+        auto it = _lruCacheMap.find(obj);
+        if (it != _lruCacheMap.end()) {
+            // log hit
+            auto & size = _size_map[obj];
+            if(size != req._size) {
+                std::cerr<<"LFOCache::lookup(), LRU object size not match"
+                    <<std::endl;
+                std::exit(1);
+            }
+            LOG("h", 0, obj.id, obj.size);
+            _lruCacheList.splice(_lruCacheList.begin(), _lruCacheList, 
+                it->second);
+            return true;
+        }
+        return false;
+    }
+
     LFO::train_seq++;
     if(LFO::objective == LFO::OHR) 
         LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
@@ -276,6 +295,21 @@ void LFOCache::admit(SimpleRequest& req)
         return;
     }
 
+    if(LFO::init) {
+        while(_currentSize + size > _cacheSize) {
+            evict();
+        }
+        // admit new object
+        uint64_t & obj = req._id;
+        _lruCacheList.push_front(obj);
+        _lruCacheMap[obj] = _lruCacheList.begin();
+        _currentSize += size;
+        _size_map[obj] = size;
+        LOG("a", _currentSize, obj.id, obj.size);
+
+        return;
+    }
+
     // not admit object if rehit_probability <.5
     double rehit_probability = LFO::calculate_rehit_probability(
         req, getSize()-getCurrentSize()
@@ -375,34 +409,38 @@ void LFOCache::evict(SimpleRequest& req)
 
 KeyT LFOCache::evict()
 {
-    #if 0
-    // TODO: rewrite this function for LFOCache
-    // evict least popular (i.e. last element)
-    if (_cacheList.size() > 0) {
-        ListIteratorType lit = _cacheList.end();
-        lit--;
-        uint64_t obj = *lit;
+    if(LFO::init) {
+        // evict least popular (i.e. last element)
+        if (_lruCacheList.size() > 0) {
+            ListIteratorType lit = _lruCacheList.end();
+            lit--;
+            uint64_t obj = *lit;
 
 
-#ifdef EVICTION_LOGGING
-        {
-            auto it = future_timestamps.find(obj);
-            unsigned int decision_qulity =
-                    static_cast<double>(it->second - current_t) / (_cacheSize * 1e6 / byte_million_req);
-            decision_qulity = min((unsigned int) 255, decision_qulity);
-            eviction_qualities.emplace_back(decision_qulity);
-            eviction_logic_timestamps.emplace_back(current_t / 65536);
-        }
-#endif
-
-        LOG("e", _currentSize, obj.id, obj.size);
-        auto & size = _size_map[obj];
-        _currentSize -= size;
-        _size_map.erase(obj);
-        _cacheMap.erase(obj);
-        _cacheList.erase(lit);
-    }
+    #ifdef EVICTION_LOGGING
+            {
+                auto it = future_timestamps.find(obj);
+                unsigned int decision_qulity =
+                        static_cast<double>(it->second - current_t) / (_cacheSize * 1e6 / byte_million_req);
+                decision_qulity = min((unsigned int) 255, decision_qulity);
+                eviction_qualities.emplace_back(decision_qulity);
+                eviction_logic_timestamps.emplace_back(current_t / 65536);
+            }
     #endif
+
+            LOG("e", _currentSize, obj.id, obj.size);
+            auto & size = _size_map[obj];
+            _currentSize -= size;
+            _size_map.erase(obj);
+            _lruCacheMap.erase(obj);
+            _lruCacheList.erase(lit);
+
+            return obj;
+        }
+        std::cerr<<"should not reach here: evicting from empty cache"
+            <<std::endl;
+        std::exit(1);
+    } // if(LFO::init) {
 
     // lfoCacheMapType::right_map::const_iterator right_iter; 
     // lfoCacheMapType::right_map::const_iterator right_iter; 
