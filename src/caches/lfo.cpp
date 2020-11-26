@@ -36,6 +36,13 @@ static inline double oP2(double T, double l, double p) {
 /*
   LFO: Learning from OPT
 */
+
+LFOCache::LFOCache()
+    : Cache(), 
+      _objective(0)
+{
+}
+
 bool LFOCache::lookup(SimpleRequest& req)
 {
 
@@ -92,12 +99,12 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 
     LFO::train_seq++;
-    if(LFO::objective == LFO::OHR) 
+    if(_objective == LFO::OHR) 
         LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
-    else if(LFO::objective == LFO::BHR)
+    else if(_objective == LFO::BHR)
         LFO::annotate(LFO::train_seq, req._id, req._size, req._size); 
     else {
-        std::cerr<<"Invalid LFO::objective " << LFO::objective <<std::endl; 
+        std::cerr<<"Invalid LFOCache::_objective " << _objective <<std::endl; 
         std::exit(EXIT_FAILURE);
     }
 
@@ -120,7 +127,7 @@ bool LFOCache::lookup(SimpleRequest& req)
 
         // evict hit object if rehit_probability <.5
         double rehit_probability = LFO::calculate_rehit_probability(
-            req, getSize()-getCurrentSize()
+            req, getSize()-getCurrentSize(), _objective
             );
         _cacheMap.left.replace_data(it, rehit_probability);
         /** 
@@ -166,7 +173,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         caching decisions based on the cache capacity, not remaining cache size
         */
         uint64_t cacheAvailBytes0 = getSize();
-        LFO::calculateOPT(cacheAvailBytes0);
+        LFO::calculateOPT(cacheAvailBytes0, _objective);
 
         /** 
         // TESTING CODE
@@ -312,7 +319,7 @@ void LFOCache::admit(SimpleRequest& req)
 
     // not admit object if rehit_probability <.5
     double rehit_probability = LFO::calculate_rehit_probability(
-        req, getSize()-getCurrentSize()
+        req, getSize()-getCurrentSize(), _objective
         );
     if(rehit_probability<(double).5) {
         return;
@@ -529,7 +536,7 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     }
     LFO::windowByteSum += size;
     LFO::windowLastSeen[idsize]=idx;
-    LFO::windowOpt.emplace_back(idx); 
+    LFO::windowOpt.emplace_back(idx, size); 
     LFO::windowTrace.emplace_back(id, size, cost);
 
     return; 
@@ -537,7 +544,9 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
 
 double LFO::calculate_rehit_probability(
         SimpleRequest& req, 
-        uint64_t cacheAvailBytes) {
+        uint64_t cacheAvailBytes, 
+        int optimization_objective // 0 for OHR, 1 for BHR
+        ) {
         //LFO
         /** predicting rehit probability::beginning */
         /** obtain shift time-invariant time gaps */
@@ -577,8 +586,10 @@ double LFO::calculate_rehit_probability(
         // cost 
         indices.push_back(HISTFEATURES+2);
         /** TESTING_CODE::beginning */
-        if((LFO::objective != LFO::OHR) && (LFO::objective != LFO::BHR)) {
-            std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+        if((optimization_objective != LFO::OHR) && 
+            (optimization_objective != LFO::BHR)) {
+            std::cerr<<"Invalid LFOCache::_objective " 
+                << optimization_objective << std::endl; 
             std::exit(EXIT_FAILURE);
         }
         /** 
@@ -592,12 +603,13 @@ double LFO::calculate_rehit_probability(
         }
         */
         /** TESTING_CODE::end */
-        if(LFO::objective == LFO::OHR) 
+        if(optimization_objective == LFO::OHR) 
             data.push_back((double)1); 
-        else if(LFO::objective == LFO::BHR) 
+        else if(optimization_objective == LFO::BHR) 
             data.push_back((double)req._size); 
         else {
-            std::cerr<<"Invalid LFO::objective " << LFO::objective << std::endl; 
+            std::cerr<<"Invalid LFOCache::_objective " 
+                << optimization_objective << std::endl; 
             std::exit(EXIT_FAILURE);
         }
 
@@ -666,12 +678,13 @@ double LFO::calculate_rehit_probability(
             std::round(100*std::log2(cacheAvailBytes));
         data.push_back(std::round(100*std::log2(currentSize)));
         // cost
-        if(LFO::objective==LFO::OHR) 
+        if(_objective==LFO::OHR) 
             data.push_back((double)1);
-        else if(LFO::objective==LFO::BHR)
+        else if(_objective==LFO::BHR)
             data.push_back((double)req._size); 
         else {
-            std::cerr<<"Invalid LFO::objective " << LFO::objective <<std::endl; 
+            std::cerr<<"Invalid LFOCache::_objective " << _objective 
+                <<std::endl; 
             std::exit(EXIT_FAILURE);
         }
         #endif
@@ -788,17 +801,28 @@ double LFO::calculate_rehit_probability(
         return rehit_probability; 
 }
 
-void LFO::calculateOPT(uint64_t cacheSize) {
+void LFO::calculateOPT(uint64_t cacheSize, int optimization_objective) {
     /**
     Note: cacheSize=physical cache size - size of metadata
     i.e., size of the cache used to store objects 
 
     */ 
 
-    sort(LFO::windowOpt.begin(), LFO::windowOpt.end(), 
-        [](const struct optEntry &lhs, const struct optEntry &rhs) {
-            return lhs.volume < rhs.volume;
-    });
+    if(optimization_objective == LFO::OHR) {
+        sort(LFO::windowOpt.begin(), LFO::windowOpt.end(), 
+            [](const struct optEntry &lhs, const struct optEntry &rhs) {
+                return lhs.volume < rhs.volume;
+            });
+    } else if(optimization_objective == LFO::BHR) {
+        sort(LFO::windowOpt.begin(), LFO::windowOpt.end(), 
+            [](const struct optEntry &lhs, const struct optEntry &rhs) {
+                return (lhs.volume/lhs.size) < (rhs.volume/rhs.size);
+            });
+    } else {
+        std::cerr<<"invalid optimization_objective= " << optimization_objective 
+            << std::endl; 
+        std::exit(1);
+    }
 
     uint64_t cacheVolume = cacheSize * LFO::windowSize;
     uint64_t currentVolume = 0;

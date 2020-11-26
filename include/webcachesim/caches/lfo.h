@@ -7,6 +7,7 @@
 #include <boost/functional/hash.hpp>
 #include <unordered_set>
 #include <utility>
+#include <string>
 #include <list>
 #include <random>
 #include "cache.h"
@@ -34,11 +35,13 @@ struct optEntry {
     uint64_t idx; 
     uint64_t volume;
     bool hasNext;
+    uint64_t size; 
 
-    optEntry(uint64_t idx) : 
+    optEntry(uint64_t idx, uint64_t size) : 
         idx(idx), 
         volume(std::numeric_limits<uint64_t>::max()), 
-        hasNext(false) {
+        hasNext(false),
+        size(size) {
     };
 };
 
@@ -54,11 +57,8 @@ struct trEntry {
 };
 
 namespace LFO {
-    // objective: 0 for OHR, 1 for BHR
-    int8_t OHR=(int8_t)0; 
-    int8_t BHR=(int8_t)1; 
-    int8_t objective = LFO::OHR; 
-
+    int OHR=0;
+    int BHR=1;
     /** TESTING_CODE::cnt_quartile::beginning */
     // purpose: observe the distribution of rehit_probabilility 
     //  (i.e., prediction output) 
@@ -138,9 +138,10 @@ namespace LFO {
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
     double calculate_rehit_probability(
         SimpleRequest& req, 
-        uint64_t cacheAvailBytes
+        uint64_t cacheAvailBytes, 
+        int optimization_objective // 0 for OHR, 1 for BHR 
         ); 
-    void calculateOPT(uint64_t cacheSize); 
+    void calculateOPT(uint64_t cacheSize, int optimization_objective); 
     void deriveFeatures(vector<float> &labels, vector<int32_t> &indptr, 
        vector<int32_t> &indices, vector<double> &data, int sampling, 
         uint64_t cacheSize);
@@ -164,6 +165,7 @@ protected:
     // map to find objects in list
     lfoCacheMapType _cacheMap;
     unordered_map<uint64_t , uint64_t > _size_map;
+    int _objective; // 0: OHR(default), 1: BHR
 #ifdef EVICTION_LOGGING
     uint32_t current_t;
     unordered_map<uint64_t, uint32_t> future_timestamps;
@@ -234,12 +236,28 @@ protected:
 */
 
 public:
-    LFOCache()
-        : Cache()
-    {
-    }
+    LFOCache();
     virtual ~LFOCache()
     {
+    }
+
+    void init_with_params(const map<string, string> &params) override {
+        //set params
+        for (auto& it: params) {
+            if (it.first == "objective") {
+                _objective = std::stoi(it.second);
+#ifdef EVICTION_LOGGING
+            } else if (it.first == "byte_million_req") {
+                byte_million_req = stoull(it.second);
+            } else if (it.first == "task_id") {
+                task_id = it.second;
+            } else if (it.first == "dburi") {
+                dburi = it.second;
+#endif
+            } else {
+                cerr << "unrecognized parameter: " << it.first << endl;
+            }
+        }
     }
 
     bool lookup(SimpleRequest &req) override;
