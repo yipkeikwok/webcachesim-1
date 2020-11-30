@@ -136,6 +136,7 @@ namespace LFO {
     };
 
     void annotate(uint64_t seq, uint64_t id, uint64_t size, double cost);
+    void conclude_window(int objective, uint64_t cache_size); 
     double calculate_rehit_probability(
         SimpleRequest& req, 
         uint64_t cacheAvailBytes, 

@@ -31,6 +31,10 @@ static inline double oP2(double T, double l, double p) {
 #define DERIVEFEATURES_TESTING
 #endif
 
+#ifndef MODEL_REFITTING 
+/** #define MODEL_REFITTING */
+#endif
+
 #define NR_NON_TIMEGAP_ELMNT 3
 
 /*
@@ -79,7 +83,24 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 #endif
 
+    LFO::train_seq++;
+    if(_objective == LFO::OHR) 
+        LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
+    else if(_objective == LFO::BHR)
+        LFO::annotate(LFO::train_seq, req._id, req._size, req._size); 
+    else {
+        std::cerr<<"Invalid LFOCache::_objective " << _objective <<std::endl; 
+        std::exit(EXIT_FAILURE);
+    }
+
     if(LFO::init) {
+        if(!(LFO::train_seq%LFO::windowSize)) {
+            std::cerr<<"Concluding Window "
+            <<(LFO::train_seq-1)/LFO::windowSize <<std::endl;
+            LFO::conclude_window(_objective, getSize()); 
+            LFO::init = false;
+        } 
+
         uint64_t & obj = req._id;
         auto it = _lruCacheMap.find(obj);
         if (it != _lruCacheMap.end()) {
@@ -96,15 +117,10 @@ bool LFOCache::lookup(SimpleRequest& req)
             return true;
         }
         return false;
-    }
+    } // if(LFO::init) {
 
-    LFO::train_seq++;
-    if(_objective == LFO::OHR) 
-        LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
-    else if(_objective == LFO::BHR)
-        LFO::annotate(LFO::train_seq, req._id, req._size, req._size); 
-    else {
-        std::cerr<<"Invalid LFOCache::_objective " << _objective <<std::endl; 
+    if(LFO::init) { 
+        std::cerr<<"LFO::init should == false at this point"<<std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -156,141 +172,138 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 
     if(!(LFO::train_seq%LFO::windowSize)) {
-        /**
-        end-of-sliding window routine
-        - deduce OPT decisions
-        - derive features
-        - train model
-        */
-        if(LFO::init) 
-            std::cerr<<"LFO::init == true"<<std::endl;
-        else
-            std::cerr<<"LFO::init == false"<<std::endl;
-
-        /**
-        For LFO::calculateOPT(), available cache size should be the cache 
-        capacity (i.e., total cache space). RSN: LFO's version of OPT makes
-        caching decisions based on the cache capacity, not remaining cache size
-        */
-        uint64_t cacheAvailBytes0 = getSize();
-        LFO::calculateOPT(cacheAvailBytes0, _objective);
-
-        /** 
-        // TESTING CODE
-        // purpose: make sure that access timestamps during the latest 
-        //  window of each object are stored in statistics[object ID]
-        std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
-        const auto it = LFO::statistics.cbegin();
-        std::list<uint64_t> list0 = it->second;
-
-        bool flag0=true; 
-        uint32_t count0;
-        count0=(uint32_t)0;
-        for(const auto& it : LFO::statistics) {
-            std::list listAccessTimestamps = it.second;
-            if(listAccessTimestamps.size() > 1) {
-                flag0=false;
-                count0++;
-            }
-        }
-        if(flag0) {
-            std::cerr<<"only 1 element on each list"<<std::endl;
-        } else {
-            std::cerr<<count0<<" lists have >=1 elements"<<std::endl;
-        }
-        */
-
-        std::vector<float> labels;
-        std::vector<int32_t> indptr;
-        std::vector<int32_t> indices;
-        std::vector<double> data;
-        uint64_t cacheAvailBytes1 = getSize()-getCurrentSize();
-   
-        /** TESTING_CODE::beginning */
-        if(cacheAvailBytes0 != cacheAvailBytes1) {
-            std::cerr
-                <<"cacheAvailBytes0 = "<<cacheAvailBytes0<<", "
-                <<"cacheAvailBytes1 = "<<cacheAvailBytes1<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        /** TESTING_CODE::end */
-        LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
-            // getSize()-getCurrentSize());
-            getSize()
-            );
-
-        /** TESTING_CODE::beginning */
-        /** 
-        // assert("labels.size()==LFO::windowTrace.size()");
-        if(labels.size()!=LFO::windowTrace.size()) {
-            std::cerr<<"labels.size()!=LFO::windowTrace.size()"<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // assert("indptr.size()==LFO::windowTrace.size()+1");
-        if(indptr.size()!=(1+LFO::windowTrace.size())) {
-            std::cerr<<"indptr.size()!=1+LFO::windowTrace.size()"<<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        uint64_t expected_indices_size = (uint64_t)0;
-        for(auto const it: LFO::windowTrace) {
-            expected_indices_size += LFO::statistics[it.id].size();
-            expected_indices_size += (uint64_t)NR_NON_TIMEGAP_ELMNT;
-        }
-        if(indices.size()!=expected_indices_size) {
-            std::cerr
-                <<"indices.size()!=expected_indices_size"<<": "
-                <<"indices.size() = "<<indices.size()<<", "
-                <<"expected_indices_size = "<< expected_indices_size << ", "
-                <<"windowTrace.size() = "<< LFO::windowTrace.size()
-                <<std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        std::cerr<<"lookup(): indices.size()= "<<indices.size()<<std::endl;
-        if(indices.size()!=data.size()) {
-            std::cerr
-                <<"indices.size()!=data.size()"<<": "
-                <<"indices.size() = "<<indices.size()<<", "
-                <<"data.size() = "<< data.size()
-                <<std::endl;
-        }
-        */
-        /** TESTING_CODE::end */
-        LFO::trainModel(labels, indptr, indices, data);
-        labels.clear();
-        indptr.clear();
-        indices.clear();
-        data.clear();
-
-        LFO::windowByteSum=(uint64_t)0; 
-        LFO::statistics.clear();
-        LFO::windowLastSeen.clear();
-        LFO::windowOpt.clear();
-        LFO::windowTrace.clear();
-
-        LFO::init = false; 
-
-        /** TESTING_CODE::cnt_quartile::beginning */
-        /** 
-        std::cerr
-            <<"LFO::cnt_quartile= "
-            <<LFO::cnt_quartile0<<" "
-            <<LFO::cnt_quartile1<<" "
-            <<LFO::cnt_quartile2<<" "
-            <<LFO::cnt_quartile3<<" "
+        std::cerr<<"Concluding Window "<<(LFO::train_seq-1)/LFO::windowSize
             <<std::endl;
-
-        LFO::cnt_quartile0
-            =LFO::cnt_quartile1
-            =LFO::cnt_quartile2
-            =LFO::cnt_quartile3
-            =(uint64_t)0;
-        */
-        /** TESTING_CODE::cnt_quartile::end */
-    }
+        LFO::conclude_window(_objective, getSize()); 
+    } // if(!(LFO::train_seq%LFO::windowSize)) {
 
     return in_cache;
+}
+
+void LFO::conclude_window(int objective, uint64_t cache_size) 
+{
+    if((LFO::train_seq%LFO::windowSize)) {
+        std::cerr<<"LFO::train_seq%LFO::windowSize should be 0"<<std::endl; 
+        std::exit(1);
+    }
+    /**
+    end-of-sliding window routine
+    - deduce OPT decisions
+    - derive features
+    - train model
+    */
+    if(LFO::init) 
+        std::cerr<<"LFO::init == true"<<std::endl;
+    else
+        std::cerr<<"LFO::init == false"<<std::endl;
+
+    /**
+    For LFO::calculateOPT(), available cache size should be the cache 
+    capacity (i.e., total cache space). RSN: LFO's version of OPT makes
+    caching decisions based on the cache capacity, not remaining cache size
+    */
+    LFO::calculateOPT(cache_size, objective);
+
+    /** 
+    */
+    // TESTING CODE
+    // purpose: make sure that access timestamps during the latest 
+    //  window of each object are stored in statistics[object ID]
+    std::cerr<<"statistics.size()= "<<LFO::statistics.size()<<", ";
+    const auto it = LFO::statistics.cbegin();
+    std::list<uint64_t> list0 = it->second;
+
+    bool flag0=true; 
+    uint32_t count0;
+    count0=(uint32_t)0;
+    for(const auto& it : LFO::statistics) {
+        std::list listAccessTimestamps = it.second;
+        if(listAccessTimestamps.size() > 1) {
+            flag0=false;
+            count0++;
+        }
+    }
+    if(flag0) {
+        std::cerr<<"only 1 element on each list"<<std::endl;
+    } else {
+        std::cerr<<count0<<" lists have >=1 elements"<<std::endl;
+    }
+
+    std::vector<float> labels;
+    std::vector<int32_t> indptr;
+    std::vector<int32_t> indices;
+    std::vector<double> data;
+
+    LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
+        cache_size
+        );
+
+    /** TESTING_CODE::beginning */
+    /** 
+    // assert("labels.size()==LFO::windowTrace.size()");
+    if(labels.size()!=LFO::windowTrace.size()) {
+        std::cerr<<"labels.size()!=LFO::windowTrace.size()"<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    // assert("indptr.size()==LFO::windowTrace.size()+1");
+    if(indptr.size()!=(1+LFO::windowTrace.size())) {
+        std::cerr<<"indptr.size()!=1+LFO::windowTrace.size()"<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    uint64_t expected_indices_size = (uint64_t)0;
+    for(auto const it: LFO::windowTrace) {
+        expected_indices_size += LFO::statistics[it.id].size();
+        expected_indices_size += (uint64_t)NR_NON_TIMEGAP_ELMNT;
+    }
+    if(indices.size()!=expected_indices_size) {
+        std::cerr
+            <<"indices.size()!=expected_indices_size"<<": "
+            <<"indices.size() = "<<indices.size()<<", "
+            <<"expected_indices_size = "<< expected_indices_size << ", "
+            <<"windowTrace.size() = "<< LFO::windowTrace.size()
+            <<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    if(indices.size()!=data.size()) {
+        std::cerr
+            <<"indices.size()!=data.size()"<<": "
+            <<"indices.size() = "<<indices.size()<<", "
+            <<"data.size() = "<< data.size()
+            <<std::endl;
+    }
+    */
+    /** TESTING_CODE::end */
+    LFO::trainModel(labels, indptr, indices, data);
+    labels.clear();
+    indptr.clear();
+    indices.clear();
+    data.clear();
+
+    LFO::windowByteSum=(uint64_t)0; 
+    LFO::statistics.clear();
+    LFO::windowLastSeen.clear();
+    LFO::windowOpt.clear();
+    LFO::windowTrace.clear();
+
+    /** TESTING_CODE::cnt_quartile::beginning */
+    /** 
+    std::cerr
+        <<"LFO::cnt_quartile= "
+        <<LFO::cnt_quartile0<<" "
+        <<LFO::cnt_quartile1<<" "
+        <<LFO::cnt_quartile2<<" "
+        <<LFO::cnt_quartile3<<" "
+        <<std::endl;
+
+    LFO::cnt_quartile0
+        =LFO::cnt_quartile1
+        =LFO::cnt_quartile2
+        =LFO::cnt_quartile3
+        =(uint64_t)0;
+    */
+    /** TESTING_CODE::cnt_quartile::end */
 }
 
 void LFOCache::admit(SimpleRequest& req)
@@ -373,7 +386,9 @@ void LFOCache::admit(SimpleRequest& req)
     _currentSize += size;
     // make sure that admitted object not already in unordered_map _size_map
     if(_size_map.find(req._id)!=_size_map.end()) {
-        std::cerr<<"_size_map.find(req._id)!=_size_map.end()"<<std::endl;
+        std::cerr<<"_size_map.find(req._id)!=_size_map.end()"
+            <<", req._id= "<<req._id
+            <<std::endl;
         std::exit(EXIT_FAILURE);
     }
     _size_map[req._id] = size;
@@ -841,9 +856,9 @@ void LFO::calculateOPT(uint64_t cacheSize, int optimization_objective) {
     }
     /** TESTING_CODE::beginning */
     /**
+    */
     std::cerr<<"LFO::calculateOPT: cacheSize = " <<cacheSize
         <<", hitc = "<< hitc <<", bytehitc = "<< bytehitc <<std::endl; 
-    */
     /** TESTING_CODE::end */
 }
 
@@ -853,6 +868,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
     int64_t cacheAvailBytes = (int64_t)cacheSize;
     /** TESTING_CODE::beginning */
     /**
+    */
     std::cerr << "LFO::deriveFeatures(), cacheAvailBytes= " << cacheAvailBytes
         << ", sampling = " << sampling
         << ", LFO::sampleSize = "<< LFO::sampleSize 
@@ -860,7 +876,6 @@ void LFO::deriveFeatures(std::vector<float> &labels,
         << ", sampling = " << sampling 
         << ", sampleSize = " << sampleSize 
         <<std::endl; 
-    */
     /** TESTING_CODE::end */
 
     // unordered_map<object ID, object size> cache 
@@ -877,8 +892,8 @@ void LFO::deriveFeatures(std::vector<float> &labels,
     uint64_t flagCnt=(uint64_t)0;
     /** TESTING_CODE::beginning */
     /**
-    uint64_t expected_indices_size=(uint64_t)0;
     */
+    uint64_t expected_indices_size=(uint64_t)0;
     /** TESTING_CODE::end */
 
     /** 
@@ -1038,13 +1053,14 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             //  * new element of value 50 corresponding to object size in 
             //      vector data
             //  that is why NR_NON_TIMEGAP_ELMNT=3
-            /** TESTING_CODE::beginning */
+            /** TESTING_CODE::verifying indices.size()::beginning */
             if(NR_NON_TIMEGAP_ELMNT!=3) {
                 std::cerr<<"NR_NON_TIMEGAP_ELMNT!=3"<<std::endl;
                 std::exit(EXIT_FAILURE);
             }
 
             /** 
+            */
             uint64_t indices_size_expected = (uint64_t)0;
             indices_size_expected += indices_size_old;
             indices_size_expected += (uint64_t)curQueue.size();
@@ -1057,12 +1073,11 @@ void LFO::deriveFeatures(std::vector<float> &labels,
                     <<std::endl;
                 std::exit(EXIT_FAILURE);
             }
-            */
             /**
+            */
             expected_indices_size+= (uint64_t)curQueue.size();
             expected_indices_size+= (uint64_t)NR_NON_TIMEGAP_ELMNT;
-            */
-            /** TESTING_CODE::end */
+            /** TESTING_CODE::verifying indices.size()::end */
             indptr.push_back(indptr[indptr.size() - 1] + idx 
                 + NR_NON_TIMEGAP_ELMNT);
         } // if (flag) {
@@ -1095,21 +1110,22 @@ void LFO::deriveFeatures(std::vector<float> &labels,
 
     /** TESTING_CODE::beginning */
     /**
+    */
     if(indices.size() != expected_indices_size) {
         std::cerr
             <<"indices.size() != expected_indices_size, "
             <<"indices.size() = " << indices.size() << ", "
-            <<"indices_size_expected = " << expected_indices_size
+            <<"expected_indices_size = " << expected_indices_size
             <<std::endl;
         std::exit(EXIT_FAILURE);
     }
     std::cerr<<"deriveFeatures(): expected_indices_size = " 
         << expected_indices_size << std::endl;
-    */
-    /** TESTING_CODE::beginning */
+    /** TESTING_CODE::end */
 
     /** TESTING_CODE::beginning */
     /**
+    */
     // -ve cache size is undesirable. See "LFO Implementation Note"
     if (negCacheSize > 0) {
         std::cerr 
@@ -1120,9 +1136,14 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             << "flagCnt= " << flagCnt
             << std::endl;
     }
-    */
-    /** TESTING_CODE::beginning */
+    /** TESTING_CODE::end */
 
+    std::cerr<<"LFO::deriveFeatures() summary"<<std::endl; 
+    std::cerr<<"* windowTrace.size()= "<<windowTrace.size()<<std::endl; 
+    std::cerr<<"* labels.size()= "<<labels.size()<<std::endl; 
+    std::cerr<<"* indptr.size()= "<<indptr.size()<<std::endl;
+    std::cerr<<"* indices.size()= "<<indices.size()<<std::endl;
+    std::cerr<<"* data.size()= "<<data.size()<<std::endl;
 }
 
 void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr, 
@@ -1148,6 +1169,14 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         data.size(), 
         HISTFEATURES + 3, 
         LFO::trainParams, nullptr, &trainData);
+    /** TESTING_CODE::Dumping DatasetHandle trainData::beginning */
+    int num_data; // no. of data points
+    LGBM_DatasetGetNumData(trainData, &num_data); 
+    std::cerr<<"LFO::trainModel(): num_data= "<<num_data<<std::endl;
+    int num_feature; // no. of features
+    LGBM_DatasetGetNumFeature(trainData, &num_feature); 
+    std::cerr<<"LFO::trainModel(): num_feature= "<<num_feature<<std::endl;
+    /** TESTING_CODE::Dumping DatasetHandle trainData::end */
 
     LGBM_DatasetSetField(
         trainData, "label", 
@@ -1172,6 +1201,23 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 break;
             }
         }
+        char booster_dump[1000000];
+        int64_t out_len;
+        if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
+            // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
+            1000000, &out_len, booster_dump)) {
+            std::cerr
+                <<"LFO::trainModel()::init==true::"
+                <<"out_len= "<<out_len<<", "
+                <<"booster_dump= "<<booster_dump
+                <<std::endl;
+        } else {
+            std::cerr
+                <<"LFO::trainModel()::init==true::"
+                <<"LGBM_BoosterDumpModel() failed"
+                <<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
     } else {
         /** TESTING_CODE::beginning */
         /**
@@ -1180,6 +1226,28 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         /** TESTING_CODE::end */
         BoosterHandle newBooster;
         LGBM_BoosterCreate(trainData, LFO::trainParams, &newBooster);
+        #ifdef MODEL_REFITTING 
+        int64_t len;
+        //YK: get number of predictions 
+        LGBM_BoosterCalcNumPredict(booster, indptr.size() - 1, 
+            C_API_PREDICT_LEAF_INDEX, 0, &len);
+        vector<double> tmp(len);
+        //YK: make prediction for a new dataset in CSR format 
+        LGBM_BoosterPredictForCSR(booster, static_cast<void*>(indptr.data()), 
+            C_API_DTYPE_INT32, indices.data(), static_cast<void*>(data.data()), 
+            C_API_DTYPE_FLOAT64, indptr.size(), data.size(), HISTFEATURES + 3,
+            C_API_PREDICT_LEAF_INDEX, 0, trainParams, &len, tmp.data());
+        //YK: iterating through vector<double> tmp
+        vector<int32_t> predLeaf(tmp.begin(), tmp.end());
+        tmp.clear();
+        //YK: merging model from booster to newBooster 
+        LGBM_BoosterMerge(newBooster, booster);
+        //YK: refit the tree model using the new data (online learning) 
+        std::cerr<<"Refitting model ..."<<std::endl; 
+        LGBM_BoosterRefit(newBooster, predLeaf.data(), indptr.size() - 1, 
+            predLeaf.size() / (indptr.size() - 1));
+
+        #else 
         // train a new booster
         for (int i = 0; i < std::stoi(LFO::trainParams["num_iterations"]); 
             i++) {
@@ -1189,8 +1257,28 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 break;
             }
         }
+        #endif
         LGBM_BoosterFree(LFO::booster);
+        std::cerr<<"Replacing model ..."<<std::endl; 
         LFO::booster = newBooster;
+
+        char booster_dump[1000000];
+        int64_t out_len;
+        if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
+            // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
+            1000000, &out_len, booster_dump)) {
+            std::cerr
+                <<"LFO::trainModel()::init==false::"
+                <<"out_len= "<<out_len<<", "
+                <<"booster_dump= "<<booster_dump
+                <<std::endl;
+        } else {
+            std::cerr
+                <<"LFO::trainModel()::init==false::"
+                <<"LGBM_BoosterDumpModel() failed"
+                <<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
     }
     LGBM_DatasetFree(trainData);
 
