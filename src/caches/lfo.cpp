@@ -88,7 +88,8 @@ bool LFOCache::lookup(SimpleRequest& req)
         std::cerr<<"Concluding Window "<<(LFO::train_seq-1)/LFO::windowSize
             <<std::endl;
         LFO::conclude_window(_objective, getSize()); 
-    } // if(!(LFO::train_seq%LFO::windowSize)) {
+        LFO::init = false;
+    } // if(!(LFO::train_seq%LFO::windowSize)) 
 
     if(_objective == LFO::OHR) 
         LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
@@ -124,7 +125,7 @@ bool LFOCache::lookup(SimpleRequest& req)
             return true;
         }
         return false;
-    } // if(LFO::init) {
+    } // if(LFO::init) 
 
     if(LFO::init) { 
         std::cerr<<"LFO::init should == false at this point"<<std::endl;
@@ -512,7 +513,7 @@ KeyT LFOCache::evict()
         std::cerr<<"should not reach here: evicting from empty cache"
             <<std::endl;
         std::exit(1);
-    } // if(LFO::init) {
+    } // if(LFO::init) 
 
     // lfoCacheMapType::right_map::const_iterator right_iter; 
     // lfoCacheMapType::right_map::const_iterator right_iter; 
