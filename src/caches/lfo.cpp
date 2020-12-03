@@ -84,6 +84,12 @@ bool LFOCache::lookup(SimpleRequest& req)
 #endif
 
     LFO::train_seq++;
+    if(!(LFO::train_seq%LFO::windowSize)) {
+        std::cerr<<"Concluding Window "<<(LFO::train_seq-1)/LFO::windowSize
+            <<std::endl;
+        LFO::conclude_window(_objective, getSize()); 
+    } // if(!(LFO::train_seq%LFO::windowSize)) {
+
     if(_objective == LFO::OHR) 
         LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
     else if(_objective == LFO::BHR)
@@ -94,13 +100,14 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 
     if(LFO::init) {
+        #if 0
         if(!(LFO::train_seq%LFO::windowSize)) {
             std::cerr<<"Concluding Window "
             <<(LFO::train_seq-1)/LFO::windowSize <<std::endl;
             LFO::conclude_window(_objective, getSize()); 
             LFO::init = false;
         } 
-
+        #endif
         uint64_t & obj = req._id;
         auto it = _lruCacheMap.find(obj);
         if (it != _lruCacheMap.end()) {
@@ -170,12 +177,6 @@ bool LFOCache::lookup(SimpleRequest& req)
         // log miss
         in_cache = false;
     }
-
-    if(!(LFO::train_seq%LFO::windowSize)) {
-        std::cerr<<"Concluding Window "<<(LFO::train_seq-1)/LFO::windowSize
-            <<std::endl;
-        LFO::conclude_window(_objective, getSize()); 
-    } // if(!(LFO::train_seq%LFO::windowSize)) {
 
     return in_cache;
 }
@@ -308,6 +309,18 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
 
 void LFOCache::admit(SimpleRequest& req)
 {
+    /** TESTING_CODE::make sure admitted object not already cached::beginning
+    */
+    auto it0 = _cacheMap.left.find(
+        std::make_pair((std::uint64_t)req.get_id(), (double)req.get_size())
+        );
+    if(it0 != _cacheMap.left.end()) {
+        std::cerr<<"LFOCache::admit(): object already cached, req ID= "
+            << req.get_id() << ", size= " << req.get_size() << std::endl; 
+        std::exit(1);
+    }
+    /** TESTING_CODE::make sure admitted object not already cached::end*/
+
     const uint64_t size = req.get_size();
     // object feasible to store?
     if (size > _cacheSize) {
@@ -323,6 +336,18 @@ void LFOCache::admit(SimpleRequest& req)
         uint64_t & obj = req._id;
         _lruCacheList.push_front(obj);
         _lruCacheMap[obj] = _lruCacheList.begin();
+
+        // update LFO _cacheMap 
+        //  use .5 as rehit_probability because 
+        //      1. object with <.5 rehit_probability should not be cached
+        //      2. LFO not kick in yet to calculate rehit_probability 
+        _cacheMap.insert(
+            {
+                {req.get_id(), req.get_size()}, 
+                .5 // rehit_probability
+            }
+            );
+
         _currentSize += size;
         _size_map[obj] = size;
         LOG("a", _currentSize, obj.id, obj.size);
@@ -351,16 +376,6 @@ void LFOCache::admit(SimpleRequest& req)
     _size_map[obj] = size;
     LOG("a", _currentSize, obj.id, obj.size);
     */
-    /** TESTING_CODE::make sure admitted object not already cached::beginning*/
-    auto it0 = _cacheMap.left.find(
-        std::make_pair((std::uint64_t)req.get_id(), (double)req.get_size())
-        );
-    if(it0 != _cacheMap.left.end()) {
-        std::cerr<<"LFOCache::admit(): object already cached, req ID= "
-            << req.get_id() << ", size= " << req.get_size() << std::endl; 
-        std::exit(1);
-    }
-    /** TESTING_CODE::make sure admitted object not already cached::end*/
     _cacheMap.insert(
         {
             {req.get_id(), req.get_size()}, 
@@ -386,10 +401,15 @@ void LFOCache::admit(SimpleRequest& req)
     _currentSize += size;
     // make sure that admitted object not already in unordered_map _size_map
     if(_size_map.find(req._id)!=_size_map.end()) {
-        std::cerr<<"_size_map.find(req._id)!=_size_map.end()"
-            <<", req._id= "<<req._id
-            <<std::endl;
-        std::exit(EXIT_FAILURE);
+        if(_size_map[req._id] == size) {
+            // the only reason to call admit() to admit an object that is 
+            //  already cached is because the object size has changed
+            std::cerr<<"admit(): admitting an object already cached, "
+                <<"req._id= "<<req._id<<", "
+                <<"req._size= "<<req.get_size()
+                <<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
     }
     _size_map[req._id] = size;
     LOG("a", _currentSize, req._id, req._size);
@@ -456,6 +476,36 @@ KeyT LFOCache::evict()
             _size_map.erase(obj);
             _lruCacheMap.erase(obj);
             _lruCacheList.erase(lit);
+
+            // synchronize LFO _cacheMap
+            uint64_t _cacheMap_size_old = _cacheMap.size();
+            auto it = _cacheMap.left.find(
+                std::make_pair((std::uint64_t)obj, (double)size)
+                );
+            if(it == _cacheMap.left.end()) {
+                std::cerr<<"evict()::init==true::object cannot be found "
+                    <<"on _cacheMap: object ID= "<<obj<<", size= "<<size
+                    <<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            _cacheMap.left.erase(it);
+            if(_cacheMap.size() != _cacheMap_size_old-1) {
+                std::cerr<<"evict()::init==true::object cannot be erased "
+                    <<"from _cacheMap"<<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            if(_cacheMap.size() != _cacheMap.left.size()) {
+                std::cerr<<"evict()::init==true::inconsistent map sizes::"
+                    <<"_cacheMap.size() != _cacheMap.left.size()"
+                    <<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            if(_cacheMap.size() != _cacheMap.right.size()) {
+                std::cerr<<"evict()::init==true::inconsistent map sizes::"
+                    <<"_cacheMap.size() != _cacheMap.right.size()"
+                    <<std::endl;
+                std::exit(EXIT_FAILURE);
+            }
 
             return obj;
         }
@@ -532,16 +582,45 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
 
     const uint64_t idx= (seq-1) % LFO::windowSize; 
     // store access timestamps
-    if(LFO::statistics.count(id)) {
+    if(LFO::statistics.count(id)==1) {
         std::list<uint64_t>& list0=LFO::statistics[id];
+
+        if(seq == (uint64_t)1734267) {
+            std::cerr<<"seq == (uint64_t)1734267, front= "
+                <<list0.front()
+                <<std::endl;
+        }
+
+        if(list0.front()==idx) {
+            std::cerr
+                <<"LFO::annotate(): idx= "<<idx
+                <<", list0.front()= "<<list0.front()
+                <<std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
+        if(
+            (list0.front()==(uint64_t)734266) &&
+            (idx==(uint64_t)734266)
+            ) {
+            std::cerr
+                <<"LFO::annotate(): idx= "<<idx
+                <<"=list0.front()"
+                <<std::endl; 
+            std::exit(EXIT_FAILURE);
+        }
         list0.push_front(idx);
         if(list0.size() > HISTFEATURES) 
             list0.pop_back();
-    } else {
+    } else if(LFO::statistics.count(id)==0) {
         // first time this object is accessed in this sliding window 
         std::list<uint64_t> list0;
-        list0.push_front(id);
+        list0.push_front(idx);
         LFO::statistics[id]=list0;
+    } else {
+        std::cerr
+            <<"LFO::annotate(): invalid LFO::statistics.count(" 
+            <<id<<")= "<<LFO::statistics.count(id)<<std::endl;
+        std::exit(EXIT_FAILURE);
     }
     const auto idsize = std::make_pair(id, size); 
     if(LFO::windowLastSeen.count(idsize)>0) {
@@ -572,7 +651,10 @@ double LFO::calculate_rehit_probability(
         int64_t              len_result;
         
         if(LFO::statistics.count(req._id) == 0) {
-            std:cerr<<"access timestamp of Object " << req._id 
+            std:cerr
+                <<"LFO::calculate_rehit_probability()::train_seq= "
+                <<LFO::train_seq<<": "
+                <<"access timestamp of Object " << req._id 
                 << " not exist in LFO::statisics" << std::endl;
             std::exit(EXIT_FAILURE);
         }
@@ -962,10 +1044,22 @@ void LFO::deriveFeatures(std::vector<float> &labels,
 
                 /** TESTING_CODE::beginning */
                 if(idx==0) {
+                    // no TESTING_CODE block is not necessary. 
+                    //  RSN: idx==0 is noise anyway 
                 } else {
-                    if(!(dist>(uint64_t)0)) {
+                    if(!(dist>=(uint64_t)0)) {
+                        // because of the curQueue.push_front(i++) statement 
+                        //  at end of the outer for loop, dist=0 is OK for 
+                        //  an object accessed by 2 consecutive requests. 
                         std::cerr
-                            <<"idx= "<<idx<<": dist= "<<dist<<"<=0"<<std::endl;
+                            <<"idx= "<<idx<<": dist= "<<dist<<"<=0"
+                            <<", lastReqTime= "<<lastReqTime
+                            <<", lit= "<<lit
+                            <<std::endl;
+                        std::cerr<<"curQueue: ";
+                        for(uint64_t elmnt: curQueue) 
+                            std::cerr<<elmnt<<" ";
+                        std::cerr<<std::endl;
                         std::exit(EXIT_FAILURE);
                     }
                 }
@@ -1080,7 +1174,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             /** TESTING_CODE::verifying indices.size()::end */
             indptr.push_back(indptr[indptr.size() - 1] + idx 
                 + NR_NON_TIMEGAP_ELMNT);
-        } // if (flag) {
+        } // if (flag) 
 
         // update cache size
         if (cache.count(it.id) == 0) {
