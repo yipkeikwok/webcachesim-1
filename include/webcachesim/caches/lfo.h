@@ -244,7 +244,10 @@ public:
 
     void init_with_params(const map<string, string> &params) override {
         //set params
+        std::cerr<<"LFOCache(): init_with_params(...): params.size()= "
+            <<params.size()<<": ";
         for (auto& it: params) {
+            std::cerr<<it.first<<"="<<it.second<<", "; 
             if (it.first == "objective") {
                 _objective = std::stoi(it.second);
 #ifdef EVICTION_LOGGING
@@ -255,10 +258,23 @@ public:
             } else if (it.first == "dburi") {
                 dburi = it.second;
 #endif
+            } else if (it.first == "n_extra_fields") {
+                /** 
+                    n_extra_fields refers the the number of columns after the 
+                    3rd column
+                */
+                if(std::stoi(it.second)!=0) { 
+                    std::cerr<<"n_extra_fields=="<<it.second<<"!=0"<<std::endl; 
+                    std::exit(EXIT_FAILURE);
+                }
             } else {
-                cerr << "unrecognized parameter: " << it.first << endl;
+                cerr 
+                    << "LFO::unrecognized parameter: key= " << it.first 
+                    << ", value= "<<it.second<< endl;
+                std::exit(EXIT_FAILURE); 
             }
         }
+        std::cerr<<std::endl;
     }
 
     bool lookup(SimpleRequest &req) override;

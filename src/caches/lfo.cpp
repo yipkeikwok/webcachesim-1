@@ -223,6 +223,12 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
         if(listAccessTimestamps.size() > 1) {
             flag0=false;
             count0++;
+        } else if(listAccessTimestamps.size() == 1) {
+        } else {
+            std::cerr
+                <<"Object "<<it.first<<" has "<<listAccessTimestamps.size() 
+                <<" elements"<<std::endl;
+            std::exit(EXIT_FAILURE);
         }
     }
     if(flag0) {
@@ -585,30 +591,6 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
     // store access timestamps
     if(LFO::statistics.count(id)==1) {
         std::list<uint64_t>& list0=LFO::statistics[id];
-
-        if(seq == (uint64_t)1734267) {
-            std::cerr<<"seq == (uint64_t)1734267, front= "
-                <<list0.front()
-                <<std::endl;
-        }
-
-        if(list0.front()==idx) {
-            std::cerr
-                <<"LFO::annotate(): idx= "<<idx
-                <<", list0.front()= "<<list0.front()
-                <<std::endl; 
-            std::exit(EXIT_FAILURE);
-        }
-        if(
-            (list0.front()==(uint64_t)734266) &&
-            (idx==(uint64_t)734266)
-            ) {
-            std::cerr
-                <<"LFO::annotate(): idx= "<<idx
-                <<"=list0.front()"
-                <<std::endl; 
-            std::exit(EXIT_FAILURE);
-        }
         list0.push_front(idx);
         if(list0.size() > HISTFEATURES) 
             list0.pop_back();
