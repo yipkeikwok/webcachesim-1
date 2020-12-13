@@ -2,6 +2,7 @@
 #include <cassert> 
 #include <fstream> 
 #include <iostream> 
+#include <cstdlib> // size_t
 #include <unordered_map> 
 #include <utility> // std::pair
 #include <boost/functional/hash.hpp> // boost::hash<>
@@ -11,7 +12,9 @@ bool lookup(uint64_t id, uint64_t size, uint64_t timestamp,
             std::pair<uint64_t,uint64_t>, 
             uint64_t, 
             boost::hash<std::pair<uint64_t, uint64_t>>
-        > cacheMap
+        > &cacheMap,
+    uint64_t &hit_object, 
+    uint64_t *hit_byte
     ) {
     std::cout<<"lookup(..): "<<id<<" "<<size<<" "<<timestamp<<std::endl;
     std::pair<uint64_t, uint64_t> id_size = std::make_pair(
@@ -21,7 +24,10 @@ bool lookup(uint64_t id, uint64_t size, uint64_t timestamp,
     int count;
     if(count = (int)cacheMap.count(id_size)) {
         assert(count==1); 
+        hit_object++;
+        *hit_byte+=size;
         cacheMap[id_size] = timestamp;
+        // std::cout<<"updated timestamp= "<<cacheMap[id_size]<<std::endl; 
         return true;
     } 
     assert(count==0);
@@ -44,10 +50,11 @@ int main(int argc, char**argv) {
             uint64_t,                       // timestamp
             boost::hash<std::pair<uint64_t, uint64_t>>
         > cacheMap;
-    uint64_t sz_cache_remaining; 
-    sz_cache_remaining = std::stoul(argv[2], nullptr, 10); 
+    uint64_t sz_cache_capacity, sz_cache_remaining; 
+    sz_cache_capacity = sz_cache_remaining = std::stoul(argv[2], nullptr, 10); 
     std::cout<<"trace file:     "<<argv[1]<<std::endl; 
-    std::cout<<"cache size:     "<<sz_cache_remaining<<std::endl; 
+    std::cout<<"cache size remaining:     "<<sz_cache_remaining<<std::endl; 
+    std::cout<<"cache size capacity:      "<<sz_cache_capacity <<std::endl; 
     uint64_t sz_window;
     sz_window = std::stoul(argv[3], nullptr, 10);
     std::cout<<"window size:    "<<sz_window<<std::endl;
@@ -66,22 +73,38 @@ int main(int argc, char**argv) {
         // std::cout<<id<<" "<<size<<" "<<decision<<std::endl;
         count_object++;
         count_byte+=size;
+        std::pair<uint64_t, uint64_t> id_size = std::make_pair(
+            (uint64_t)id, (uint64_t)size
+            );
         if(!decision) {
-            /**
-            if(!lookup(id, size, timestamp, cacheMap)) {
+            if(!lookup(id, size, timestamp, cacheMap, hit_object, &hit_byte
+                    )
+                ) {
                 // not in cache 
             } else {
                 // in cache 
-                hit_object++;
-                hit_byte+=size;
+                if(!(sz_cache_remaining + size <= sz_cache_capacity)) {
+                    std::cerr
+                        <<"sz_cache_remaining + size should <= "
+                        <<"sz_cache_capacity: "
+                        <<"sz_cache_remaining= "<<sz_cache_remaining<<", "
+                        <<"sz_object= "<<size<<", "
+                        <<"sz_cache_capacity= "<<sz_cache_capacity<<std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                if(cacheMap.erase(id_size) != (size_t)1) {
+                    std::cerr
+                        <<"failed to erase ("<<id<<", "<<size<<") from cache"
+                        <<std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                sz_cache_remaining += size;
             }
-            */
         } else if(decision==1) {
-            if(!lookup(id, size, timestamp, cacheMap)) {
+            if(!lookup(id, size, timestamp, cacheMap, hit_object, &hit_byte
+                    )
+                ) {
                 // not in cache 
-                std::pair<uint64_t, uint64_t> id_size = std::make_pair(
-                    (uint64_t)id, (uint64_t)size
-                    );
                 assert(
                     cacheMap.count(id_size)==(size_t)0
                     );
@@ -100,8 +123,6 @@ int main(int argc, char**argv) {
                 // in cache 
                 // action: none
                 std::cout<<id<<" "<<size<<" in cache"<<std::endl;
-                hit_object++;
-                hit_byte+=size;
             }
         } else {
             std::cerr<<"Invalid decision (2nd check): "<<decision<<std::endl;
@@ -116,28 +137,11 @@ int main(int argc, char**argv) {
         <<std::endl
         <<"count_byte= "<<count_byte<<", hit_byte= "<<hit_byte
         <<std::endl;
-    return 0;
 
-    #if 0
-    std::unordered_map<
-        std::pair<uint64_t, uint64_t>, //<id, size> 
-        uint8_t, // decision
-        boost::hash<std::pair<uint64_t, uint64_t>>
-        > cacheMap; 
-
-    while(std::cin >> id >> size >> decision) {
-        const std::pair<uint64_t, uint64_t> id_size = std::make_pair(id, size); 
-        cacheMap[id_size] = decision; 
-    }
-    for(const auto& it: cacheMap) {
-        // std::cout<<it.first<<" "<<it.second<<std::endl;
-        const auto& pair0 = it.first;
+    std::cout<<"cached object (id size latest_access_timestamp)"<<std::endl;
+    for(const auto &it : cacheMap) {
+        std::pair<uint64_t, uint64_t> pair0 = it.first; 
         std::cout<<pair0.first<<" "<<pair0.second<<" "<<it.second<<std::endl;
-        //uint64_t uint0 = it.second;
-        //std::cout<<uint0<<std::endl;
-        //std::cout<<cacheMap[it.first]<<std::endl;
     }
-    #endif
-
     return 0;
 }
