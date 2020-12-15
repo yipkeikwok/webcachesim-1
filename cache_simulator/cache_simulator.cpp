@@ -1,4 +1,21 @@
+/** 
+Cache Simulator
+What it does: Given a trace, calculate overall and per-window OHR and BHR
+
+Usage: cache_simulator.exe [calculateOPT trace] [cache size] [window size]
+
+trace format: [object ID] [object size] [caching decision: 0(not cache)/1(cache)
+778030675 13539 0
+3484637698 17635 0
+1130267045 152 1
+3423744231 616 1
+
+Note: If the size of an object has changes, it is regarded as a NEW object.
+*/
+
 //#define NDEBUG
+//#define  SAFE_CHECK0
+#define DEBUG_LEVEL 0
 #include <cassert> 
 #include <fstream> 
 #include <iostream> 
@@ -16,7 +33,9 @@ bool lookup(uint64_t id, uint64_t size, uint64_t timestamp,
     uint64_t &hit_object, 
     uint64_t *hit_byte
     ) {
+    #if DEBUG_LEVEL > 0
     std::cout<<"lookup(..): "<<id<<" "<<size<<" "<<timestamp<<std::endl;
+    #endif
     std::pair<uint64_t, uint64_t> id_size = std::make_pair(
         (uint64_t)id, 
         (uint64_t)size
@@ -58,8 +77,20 @@ int main(int argc, char**argv) {
     uint64_t sz_window;
     sz_window = std::stoul(argv[3], nullptr, 10);
     std::cout<<"window size:    "<<sz_window<<std::endl;
-    uint64_t count_object, count_byte, hit_object, hit_byte;
-    count_object=count_byte=hit_object=hit_byte=(uint64_t)0; 
+    uint64_t count_object_overall, count_byte_overall, hit_object_overall, 
+        hit_byte_overall;
+    count_object_overall=count_byte_overall=hit_object_overall=hit_byte_overall
+        =(uint64_t)0; 
+    uint64_t count_object_window, count_byte_window, hit_object_window, 
+        hit_byte_window;
+    count_object_window=count_byte_window=hit_object_window=hit_byte_window
+        =(uint64_t)0; 
+    #ifdef SAFE_CHECK0
+    uint64_t count_object_window_sum, count_byte_window_sum;
+    uint64_t hit_object_window_sum,   hit_byte_window_sum;
+    count_object_window_sum=count_byte_window_sum=(uint64_t)0; 
+    hit_object_window_sum  =hit_byte_window_sum  =(uint64_t)0;
+    #endif
 
     uint64_t id, size; 
     int decision; 
@@ -71,13 +102,15 @@ int main(int argc, char**argv) {
             std::exit(EXIT_FAILURE);
         }
         // std::cout<<id<<" "<<size<<" "<<decision<<std::endl;
-        count_object++;
-        count_byte+=size;
+        count_object_overall++;
+        count_object_window ++;
+        count_byte_overall+=size;
+        count_byte_window +=size;
         std::pair<uint64_t, uint64_t> id_size = std::make_pair(
             (uint64_t)id, (uint64_t)size
             );
         if(!decision) {
-            if(!lookup(id, size, timestamp, cacheMap, hit_object, &hit_byte
+            if(!lookup(id, size, timestamp, cacheMap, hit_object_window, &hit_byte_window
                     )
                 ) {
                 // not in cache 
@@ -92,6 +125,11 @@ int main(int argc, char**argv) {
                         <<"sz_cache_capacity= "<<sz_cache_capacity<<std::endl;
                     std::exit(EXIT_FAILURE);
                 }
+                #if DEBUG_LEVEL > 0
+                std::cout<<id<<" "<<size<<" in cache"<<std::endl;
+                #endif
+                hit_object_overall++; 
+                hit_byte_overall  +=size;
                 if(cacheMap.erase(id_size) != (size_t)1) {
                     std::cerr
                         <<"failed to erase ("<<id<<", "<<size<<") from cache"
@@ -101,7 +139,7 @@ int main(int argc, char**argv) {
                 sz_cache_remaining += size;
             }
         } else if(decision==1) {
-            if(!lookup(id, size, timestamp, cacheMap, hit_object, &hit_byte
+            if(!lookup(id, size, timestamp, cacheMap, hit_object_window, &hit_byte_window
                     )
                 ) {
                 // not in cache 
@@ -122,26 +160,77 @@ int main(int argc, char**argv) {
             } else {
                 // in cache 
                 // action: none
+                #if DEBUG_LEVEL > 0
                 std::cout<<id<<" "<<size<<" in cache"<<std::endl;
+                #endif
+                hit_object_overall++;
+                hit_byte_overall  +=size;
             }
         } else {
             std::cerr<<"Invalid decision (2nd check): "<<decision<<std::endl;
             std::exit(EXIT_FAILURE);
         }
-        timestamp++;           
+        timestamp++;
+        if(!(timestamp%sz_window)) {
+            std::cout 
+                    <<"Window "<<timestamp/sz_window-1<<": "
+                    <<"OHR= "<< (float)hit_object_window/count_object_window
+                    <<" ("<<hit_object_window<<"/"<<count_object_window<<")"
+                    <<", "
+                    <<"BHR= "<< (float)hit_byte_window/count_byte_window
+                    <<" ("<<hit_byte_window<<"/"<<count_byte_window<<")"
+                    <<std::endl;
+            #ifdef SAFE_CHECK0
+            count_object_window_sum+=count_object_window;
+            count_byte_window_sum  +=count_byte_window  ;
+            hit_object_window_sum  +=hit_object_window  ;
+            hit_byte_window_sum    +=hit_byte_window    ;
+            #endif
+            count_object_window=count_byte_window=hit_object_window
+                =hit_byte_window=(uint64_t)0; 
+        }
     } // while(ifstream_trace >> id >> size >> decision) 
+    if(timestamp%sz_window) {
+        std::cout 
+                <<"Window "<<timestamp/sz_window<<": "
+                <<"OHR= "<< (float)hit_object_window/count_object_window
+                <<" ("<<hit_object_window<<"/"<<count_object_window<<")"
+                <<", "
+                <<"BHR= "<< (float)hit_byte_window/count_byte_window
+                <<" ("<<hit_byte_window<<"/"<<count_byte_window<<")"
+                <<std::endl;
+        #ifdef SAFE_CHECK0
+        count_object_window_sum+=count_object_window;
+        count_byte_window_sum  +=count_byte_window  ;
+        hit_object_window_sum  +=hit_object_window  ;
+        hit_byte_window_sum    +=hit_byte_window    ;
+        #endif
+    }
     ifstream_trace.close();
 
-    std::cout
-        <<"count_object= "<<count_object<<", hit_object= "<<hit_object
-        <<std::endl
-        <<"count_byte= "<<count_byte<<", hit_byte= "<<hit_byte
-        <<std::endl;
+    #ifdef SAFE_CHECK0
+    assert(count_object_window_sum == count_object_overall); 
+    assert(count_byte_window_sum   == count_byte_overall); 
+    assert(hit_object_window_sum   == hit_object_overall); 
+    assert(hit_byte_window_sum     == hit_byte_overall); 
+    #endif
 
+    std::cout 
+            <<"Overall: "
+            <<"OHR= "<< (float)hit_object_overall/count_object_overall
+            <<" ("<<hit_object_overall<<"/"<<count_object_overall<<")"
+            <<", "
+            <<"BHR= "<< (float)hit_byte_overall  /count_byte_overall
+            <<" ("<<hit_byte_overall  <<"/"<<count_byte_overall  <<")"
+            <<std::endl;
+
+    #if DEBUG_LEVEL > 0
     std::cout<<"cached object (id size latest_access_timestamp)"<<std::endl;
     for(const auto &it : cacheMap) {
         std::pair<uint64_t, uint64_t> pair0 = it.first; 
         std::cout<<pair0.first<<" "<<pair0.second<<" "<<it.second<<std::endl;
     }
+    #endif
+
     return 0;
 }
