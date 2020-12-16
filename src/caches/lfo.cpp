@@ -8,6 +8,9 @@
 #include <cassert>
 */
 #include <cstdlib>
+/** exporting calculateOPT() decisions::beginning */ 
+#include <fstream>
+/** exporting calculateOPT() decisions::end */ 
 #include <LightGBM/application.h>
 #include <LightGBM/c_api.h>
 #include "lfo.h"
@@ -205,6 +208,18 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     caching decisions based on the cache capacity, not remaining cache size
     */
     LFO::calculateOPT(cache_size, objective);
+
+    /** exporting calculateOPT() decisions::beginning */
+    #if 0
+    std::ofstream decision_file;
+    decision_file.open("calculateOPT.decision.202012152004.txt", std::ios_base::app);
+    for(auto it: LFO::windowTrace) {
+        decision_file<<it.id<<" "<<it.size<<" "<<it.toCache; 
+        decision_file<<std::endl;
+    }
+    decision_file.close();
+    #endif
+    /** exporting calculateOPT() decisions::end */
 
     /** 
     */
