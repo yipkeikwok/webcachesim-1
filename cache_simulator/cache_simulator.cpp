@@ -2,7 +2,11 @@
 Cache Simulator
 What it does: Given a trace, calculate overall and per-window OHR and BHR
 
-Usage: cache_simulator.exe [calculateOPT trace] [cache size] [window size]
+To compile: 
+g++ -g -std=c++11 -o ./cache_simulator.exe ./cache_simulator.cpp
+
+To run: 
+cache_simulator.exe [calculateOPT trace] [cache size] [window size]
 
 trace format: [object ID] [object size] [caching decision: 0(not cache)/1(cache)
 778030675 13539 0
@@ -179,7 +183,21 @@ int main(int argc, char**argv) {
                     <<", "
                     <<"BHR= "<< (float)hit_byte_window/count_byte_window
                     <<" ("<<hit_byte_window<<"/"<<count_byte_window<<")"
-                    <<std::endl;
+                    <<", "
+                    // If calculateOPT() is implemented correctly, 
+                    //  cacheMap.size() should ==0 at end of each window 
+                    <<"cacheMap.size()= "<<cacheMap.size();
+            if(cacheMap.size()) {
+                    std::cout
+                        <<", "
+                        <<cacheMap.begin()->first.first     // id
+                        <<" "
+                        <<cacheMap.begin()->first.second    // size
+                        <<" "
+                        // latest access timestamp
+                        <<cacheMap.begin()->second;
+            }
+            std::cout<<std::endl;
             #ifdef SAFE_CHECK0
             count_object_window_sum+=count_object_window;
             count_byte_window_sum  +=count_byte_window  ;
@@ -198,7 +216,19 @@ int main(int argc, char**argv) {
                 <<", "
                 <<"BHR= "<< (float)hit_byte_window/count_byte_window
                 <<" ("<<hit_byte_window<<"/"<<count_byte_window<<")"
-                <<std::endl;
+                <<", "
+                <<"cacheMap.size()= "<<cacheMap.size();
+        if(cacheMap.size()) {
+            std::cout
+                <<", "
+                <<cacheMap.begin()->first.first     // id
+                <<" "
+                <<cacheMap.begin()->first.second    // size
+                <<" "
+                // latest access timestamp
+                <<cacheMap.begin()->second;
+        }
+        std::cout<<std::endl;
         #ifdef SAFE_CHECK0
         count_object_window_sum+=count_object_window;
         count_byte_window_sum  +=count_byte_window  ;
@@ -222,6 +252,8 @@ int main(int argc, char**argv) {
             <<", "
             <<"BHR= "<< (float)hit_byte_overall  /count_byte_overall
             <<" ("<<hit_byte_overall  <<"/"<<count_byte_overall  <<")"
+            <<", "
+            <<"cacheMap.size()= "<<cacheMap.size()
             <<std::endl;
 
     #if DEBUG_LEVEL > 0

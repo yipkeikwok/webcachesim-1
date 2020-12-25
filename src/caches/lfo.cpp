@@ -86,14 +86,16 @@ bool LFOCache::lookup(SimpleRequest& req)
     }
 #endif
 
-    LFO::train_seq++;
-    if(!(LFO::train_seq%LFO::windowSize)) {
+    if(!(LFO::train_seq%LFO::windowSize) && LFO::train_seq!=0) {
         std::cerr<<"Concluding Window "<<(LFO::train_seq-1)/LFO::windowSize
             <<std::endl;
         LFO::conclude_window(_objective, getSize()); 
         LFO::init = false;
     } // if(!(LFO::train_seq%LFO::windowSize)) 
 
+    bool in_cache=false;
+    LFO::train_seq++;
+    //202012231608::beginning
     if(_objective == LFO::OHR) 
         LFO::annotate(LFO::train_seq, req._id, req._size, 1.0); 
     else if(_objective == LFO::BHR)
@@ -102,6 +104,7 @@ bool LFOCache::lookup(SimpleRequest& req)
         std::cerr<<"Invalid LFOCache::_objective " << _objective <<std::endl; 
         std::exit(EXIT_FAILURE);
     }
+    //202012231608::end
 
     if(LFO::init) {
         #if 0
@@ -125,63 +128,77 @@ bool LFOCache::lookup(SimpleRequest& req)
             LOG("h", 0, obj.id, obj.size);
             _lruCacheList.splice(_lruCacheList.begin(), _lruCacheList, 
                 it->second);
-            return true;
+            in_cache = true;
+        } else {
+            in_cache = false;
         }
-        return false;
-    } // if(LFO::init) 
-
-    if(LFO::init) { 
-        std::cerr<<"LFO::init should == false at this point"<<std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    bool in_cache=true;
-    uint64_t & obj = req._id;
-    auto it = _cacheMap.left.find(
-        std::make_pair((std::uint64_t)req._id, (double)req._size)
-        );
-    if (it != _cacheMap.left.end()) {
-        // log hit
-        auto & size = _size_map[obj];
-        /** TESTING_CODE::verifying _size_map::beginning */
-        if(size != req._size) {
-            std::cerr<<"size != req._size"<<size<<" "<<req._size<<std::endl;
+        #if 0
+        std::cerr
+            <<"lookup(): Object "<<obj<<" in_cache="<<in_cache
+            <<", "<<_lruCacheMap.size()<<" items in cache"<<std::endl;
+        if(obj==(uint64_t)4163405339) {
+            std::cerr<<"lookup(): _lruCacheMap: ";
+            for(auto it1: _lruCacheMap) 
+                std::cerr<<it1.first<<" ";
+            std::cerr<<std::endl;
+        }
+        #endif
+    } else {
+        if(LFO::init) { 
+            std::cerr<<"LFO::init should == false at this point"<<std::endl;
             std::exit(EXIT_FAILURE);
         }
-        /** TESTING_CODE::verifying _size_map::end */
-        LOG("h", 0, req._id, req._size);
-        in_cache = true;
 
-        // evict hit object if rehit_probability <.5
-        double rehit_probability = LFO::calculate_rehit_probability(
-            req, getSize()-getCurrentSize(), _objective
+        uint64_t & obj = req._id;
+        auto it = _cacheMap.left.find(
+            std::make_pair((std::uint64_t)req._id, (double)req._size)
             );
-        _cacheMap.left.replace_data(it, rehit_probability);
-        /** 
-        // hit() is from LRU implementation
-        hit(it, rehit_probability);
-        */
-        if(rehit_probability<(double).5) {
-            // evict hit object
-            KeyT evicted_req_id = evict();
-
-            /** TESTING_CODE::beginning */
-            // Object ID verification: Object ID of accessed and evicted object 
-            //  should be same 
-            if(evicted_req_id != req._id) {
-                std::cerr<<"LFOCache::lookup(): evicted_req_id != req._id, "
-                    << "evicted_req_id= " << evicted_req_id  << ", "
-                    << "req._id= " << req._id
-                    << std::endl;
+        if (it != _cacheMap.left.end()) {
+            // log hit
+            auto & size = _size_map[obj];
+            /** TESTING_CODE::verifying _size_map::beginning */
+            if(size != req._size) {
+                std::cerr<<"size != req._size"<<size<<" "<<req._size<<std::endl;
                 std::exit(EXIT_FAILURE);
             }
-            /** TESTING_CODE::end */
+            /** TESTING_CODE::verifying _size_map::end */
+            LOG("h", 0, req._id, req._size);
+            in_cache = true;
+
+            // evict hit object if rehit_probability <.5
+            double rehit_probability = LFO::calculate_rehit_probability(
+                req, getSize()-getCurrentSize(), _objective
+                );
+            _cacheMap.left.replace_data(it, rehit_probability);
+            /** 
+            // hit() is from LRU implementation
+            hit(it, rehit_probability);
+            */
+            if(rehit_probability<(double).5) {
+                // evict hit object
+                KeyT evicted_req_id = evict();
+
+                /** TESTING_CODE::beginning */
+                // Object ID verification: Object ID of accessed and evicted object 
+                //  should be same 
+                if(evicted_req_id != req._id) {
+                    std::cerr<<"LFOCache::lookup(): evicted_req_id != req._id, "
+                        << "evicted_req_id= " << evicted_req_id  << ", "
+                        << "req._id= " << req._id
+                        << std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                /** TESTING_CODE::end */
+            }
+        } else {
+            // log miss
+            in_cache = false;
         }
-    } else {
-        // log miss
-        in_cache = false;
     }
 
+    std::cerr
+        <<"lookup(): "<<LFO::init<<" "<<LFO::train_seq<<" "<<req._id<<" "
+        <<req._size<<" "<<in_cache<<std::endl;
     return in_cache;
 }
 
@@ -211,14 +228,18 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
 
     /** exporting calculateOPT() decisions::beginning */
     #if 0
+    #endif
     std::ofstream decision_file;
-    decision_file.open("calculateOPT.decision.202012152004.txt", std::ios_base::app);
+    decision_file.open("calculateOPT.decision.202012241635.txt", 
+        std::ios_base::app);
     for(auto it: LFO::windowTrace) {
-        decision_file<<it.id<<" "<<it.size<<" "<<it.toCache; 
+        decision_file
+            <<it.seq<<" "
+            <<it.id<<" "<<it.size<<" "<<it.toCache<<" "<<it.lastSeenIndex<<" "
+            <<it.lastSeenCount; 
         decision_file<<std::endl;
     }
     decision_file.close();
-    #endif
     /** exporting calculateOPT() decisions::end */
 
     /** 
@@ -337,8 +358,25 @@ void LFOCache::admit(SimpleRequest& req)
         std::make_pair((std::uint64_t)req.get_id(), (double)req.get_size())
         );
     if(it0 != _cacheMap.left.end()) {
-        std::cerr<<"LFOCache::admit(): object already cached, req ID= "
+        std::cerr<<"LFOCache::admit(): object already cached, LFO::train_seq= "
+            <<LFO::train_seq
+            <<", req ID= "
             << req.get_id() << ", size= " << req.get_size() << std::endl; 
+        std::cerr<<"_lruCacheMap: "<<_lruCacheMap.size()<<" items: ";
+        for(auto& it1: _lruCacheMap) 
+            std::cerr<<it1.first<<" ";
+        std::cerr<<std::endl;
+
+        auto it1 = _lruCacheMap.find(req.get_id());
+        if(it1 != _lruCacheMap.end()) {
+            std::cerr
+                <<"admit(): Object "<<req.get_id()
+                <<" found in _lruCacheMap"<<std::endl;
+        } else {
+            std::cerr
+                <<"admit(): Object "<<req.get_id()
+                <<" not found in _lruCacheMap"<<std::endl;
+        }
         std::exit(1);
     }
     /** TESTING_CODE::make sure admitted object not already cached::end*/
@@ -358,6 +396,12 @@ void LFOCache::admit(SimpleRequest& req)
         uint64_t & obj = req._id;
         _lruCacheList.push_front(obj);
         _lruCacheMap[obj] = _lruCacheList.begin();
+        auto it1 = _lruCacheMap.find(obj); 
+        if(it1 == _lruCacheMap.end()) {
+            std::cerr<<"admit(): Object "<<obj<<" cannot be found on LRU Cache"
+                <<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
 
         // update LFO _cacheMap 
         //  use .5 as rehit_probability because 
@@ -621,15 +665,59 @@ void LFO::annotate(uint64_t seq, uint64_t id, uint64_t size, double cost) {
         std::exit(EXIT_FAILURE);
     }
     const auto idsize = std::make_pair(id, size); 
+    bool hasLastSeen=false;
+    uint64_t lastSeenIndex=std::numeric_limits<uint64_t>::max(); 
+    int lastSeenCount=(int)LFO::windowLastSeen.count(idsize); 
+    if(lastSeenCount!=0 && lastSeenCount!=1) {
+        std::cerr<<"lastSeenCount= "<<lastSeenCount<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
     if(LFO::windowLastSeen.count(idsize)>0) {
+        hasLastSeen=true;
+        lastSeenIndex=(uint64_t)LFO::windowLastSeen[idsize];
+        if(LFO::windowOpt[lastSeenIndex].id!=id) {
+            std::cerr<<"id unmatch: "<<seq<<" "<<id<<" "<<size<<" "
+                <<"lastSeen: "
+                <<LFO::windowOpt[lastSeenIndex].seq<<" "
+                <<LFO::windowOpt[lastSeenIndex].id<<" "
+                <<LFO::windowOpt[lastSeenIndex].size;
+            std::cerr<<"windowOpt size= "<<windowOpt.size()<<std::endl;
+            for(auto &it: LFO::windowOpt) 
+                std::cerr
+                    <<it.seq<<" "<<it.idx<<" "<<it.id<<" "<<it.size
+                    <<" "<<it.hasNext<<" "<<it.volume<<std::endl;
+            std::cerr<<"windowTrace size= "<<windowTrace.size()<<std::endl;
+            for(auto &it: LFO::windowTrace) 
+                std::cerr
+                    <<it.seq<<" "<<it.id<<" "<<it.size<<" "<<it.toCache<<" "
+                    <<it.lastSeenIndex<<" "<<it.lastSeenCount<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        if(LFO::windowOpt[lastSeenIndex].size!=size) {
+            std::cerr<<"size unmatch: "<<seq<<" "<<id<<" "<<size<<" "
+                <<"lastSeen: "
+                <<LFO::windowOpt[lastSeenIndex].seq<<" "
+                <<LFO::windowOpt[lastSeenIndex].id<<" "
+                <<LFO::windowOpt[lastSeenIndex].size;
+            std::exit(EXIT_FAILURE);
+        }
         LFO::windowOpt[LFO::windowLastSeen[idsize]].hasNext = true;
         LFO::windowOpt[LFO::windowLastSeen[idsize]].volume = (idx - 
            LFO::windowLastSeen[idsize]) * size;
     }
     LFO::windowByteSum += size;
     LFO::windowLastSeen[idsize]=idx;
-    LFO::windowOpt.emplace_back(idx, size); 
-    LFO::windowTrace.emplace_back(id, size, cost);
+    LFO::windowOpt.emplace_back(idx, seq, id, size); 
+    if(!hasLastSeen)
+        LFO::windowTrace.emplace_back(seq, id, size, cost, lastSeenCount);
+    else {
+        if(LFO::windowOpt[lastSeenIndex].hasNext == false) {
+            std::cerr<<"LFO::windowOpt[lastSeenIndex].hasNext == false";
+            std::exit(EXIT_FAILURE);
+        }
+        LFO::windowTrace.emplace_back(seq, id, size, cost, lastSeenIndex, 
+            lastSeenCount);
+    }
 
     return; 
 }

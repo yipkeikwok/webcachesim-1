@@ -10,6 +10,7 @@
 #include <string>
 #include <list>
 #include <random>
+#include <limits>
 #include "cache.h"
 #include "adaptsize_const.h" /* AdaptSize constants */
 
@@ -36,9 +37,21 @@ struct optEntry {
     uint64_t volume;
     bool hasNext;
     uint64_t size; 
+    uint64_t id;
+    uint64_t seq;
 
     optEntry(uint64_t idx, uint64_t size) : 
         idx(idx), 
+        volume(std::numeric_limits<uint64_t>::max()), 
+        hasNext(false),
+        size(size),
+        id(std::numeric_limits<uint64_t>::max()) {
+    };
+
+    optEntry(uint64_t idx, uint64_t seq, uint64_t id, uint64_t size) : 
+        idx(idx), 
+        seq(seq),
+        id(id),
         volume(std::numeric_limits<uint64_t>::max()), 
         hasNext(false),
         size(size) {
@@ -50,9 +63,21 @@ struct trEntry {
     uint64_t size;
     double cost; 
     bool toCache; 
+    uint64_t lastSeenIndex;
+    int lastSeenCount;
+    uint64_t seq;
 
-    trEntry(uint64_t id, uint64_t size, double cost) : 
-        id(id), size(size), cost(cost), toCache(false) {
+    trEntry(uint64_t seq, uint64_t id, uint64_t size, double cost, 
+        int lastSeenCount) : 
+        seq(seq), id(id), size(size), cost(cost), toCache(false), 
+        lastSeenIndex(std::numeric_limits<uint64_t>::max()),
+        lastSeenCount(lastSeenCount) {
+    };
+
+    trEntry(uint64_t seq, uint64_t id, uint64_t size, double cost, 
+        uint64_t lastSeenIndex, int lastSeenCount) :
+        seq(seq), id(id), size(size), cost(cost), toCache(false), 
+        lastSeenIndex(lastSeenIndex), lastSeenCount(lastSeenCount) {
     };
 };
 
