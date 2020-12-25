@@ -25,6 +25,7 @@ Note: If the size of an object has changes, it is regarded as a NEW object.
 #include <iostream> 
 #include <cstdlib> // size_t
 #include <unordered_map> 
+#include <vector> 
 #include <utility> // std::pair
 #include <boost/functional/hash.hpp> // boost::hash<>
 
@@ -96,16 +97,41 @@ int main(int argc, char**argv) {
     hit_object_window_sum  =hit_byte_window_sum  =(uint64_t)0;
     #endif
 
+    struct trace_entry {
+        uint64_t id; 
+        uint64_t size;
+        int decision;
+
+        trace_entry(uint64_t id, uint64_t size, int decision) : 
+            id(id), size(size), decision(decision) {
+        };
+    };
+    std::vector<struct trace_entry> window_trace;
+
+    std::unordered_map<
+        std::pair<uint64_t, uint64_t>,  //<id, size>
+        uint64_t,                       // last_seen_index
+        boost::hash<std::pair<uint64_t, uint64_t>>
+        > window_last_seen;
+
     uint64_t id, size; 
     int decision; 
     uint64_t timestamp; 
     timestamp=(uint64_t)0; 
+    uint64_t index = (uint64_t)0;
+    // smaller the volume, higher the hit density, more likely to cache
+    // min volume of an object that LFO::calculateOPT() decided not to cache
+    uint64_t min_volume = std::numeric_limits<uint64_t>::max();
+    // max volume of an object that LFO::calculateOPT() decided not cache
+    uint64_t max_volume = (uint64_t)0;
     while(ifstream_trace >> id >> size >> decision) {
         if((decision<0)||(decision>1)) {
             std::cerr<<"Invalid decision "<<decision<<std::endl;
             std::exit(EXIT_FAILURE);
         }
         // std::cout<<id<<" "<<size<<" "<<decision<<std::endl;
+
+        window_trace.emplace_back(id, size, decision);
         count_object_overall++;
         count_object_window ++;
         count_byte_overall+=size;
@@ -113,6 +139,26 @@ int main(int argc, char**argv) {
         std::pair<uint64_t, uint64_t> id_size = std::make_pair(
             (uint64_t)id, (uint64_t)size
             );
+        if(window_last_seen.count(id_size)==(size_t)0) {
+            // object accessed first 1st time in this window 
+        } else {
+            // object accessed early in this window 
+            assert(window_last_seen.count(id_size)==(size_t)1);
+            uint64_t last_seen_index=window_last_seen[id_size];
+            uint64_t volume=size*(index-last_seen_index);
+            if(window_trace[last_seen_index].decision==0) {
+                if(volume<min_volume) {
+                    min_volume=volume;
+                }
+            } else {
+                assert(window_trace[last_seen_index].decision==1);
+                if(volume>max_volume) {
+                    max_volume=volume;
+                }
+            }
+        }
+        window_last_seen[id_size]=index;
+        index++;
         if(!decision) {
             if(!lookup(id, size, timestamp, cacheMap, hit_object_window, &hit_byte_window
                     )
@@ -177,6 +223,16 @@ int main(int argc, char**argv) {
         timestamp++;
         if(!(timestamp%sz_window)) {
             std::cout 
+                <<"Window "<<timestamp/sz_window-1<<": "
+                <<"min volume TO NOT CACHE= "<<min_volume<<", "
+                <<"max volume to CACHE= "<<max_volume<<std::endl;
+            assert(max_volume < min_volume);
+            window_trace.clear();
+            window_last_seen.clear();
+            min_volume=std::numeric_limits<uint64_t>::max();
+            max_volume=(uint64_t)0;
+            index=(uint64_t)0;
+            std::cout 
                     <<"Window "<<timestamp/sz_window-1<<": "
                     <<"OHR= "<< (float)hit_object_window/count_object_window
                     <<" ("<<hit_object_window<<"/"<<count_object_window<<")"
@@ -236,6 +292,7 @@ int main(int argc, char**argv) {
         hit_byte_window_sum    +=hit_byte_window    ;
         #endif
     }
+    std::cout<<"trace.size()= "<<window_trace.size()<<std::endl;
     ifstream_trace.close();
 
     #ifdef SAFE_CHECK0
