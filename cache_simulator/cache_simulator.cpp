@@ -122,7 +122,7 @@ int main(int argc, char**argv) {
     // smaller the volume, higher the hit density, more likely to cache
     // min volume of an object that LFO::calculateOPT() decided not to cache
     uint64_t min_volume = std::numeric_limits<uint64_t>::max();
-    // max volume of an object that LFO::calculateOPT() decided not cache
+    // max volume of an object that LFO::calculateOPT() decided to cache
     uint64_t max_volume = (uint64_t)0;
     while(ifstream_trace >> id >> size >> decision) {
         if((decision<0)||(decision>1)) {
