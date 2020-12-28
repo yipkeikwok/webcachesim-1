@@ -62,6 +62,7 @@ struct trEntry {
     uint64_t id;
     uint64_t size;
     double cost; 
+    bool decision_prediction; // caching decision based on model prediction
     bool toCache; 
     uint64_t lastSeenIndex;
     int lastSeenCount;
@@ -69,14 +70,16 @@ struct trEntry {
 
     trEntry(uint64_t seq, uint64_t id, uint64_t size, double cost, 
         int lastSeenCount) : 
-        seq(seq), id(id), size(size), cost(cost), toCache(false), 
+        seq(seq), id(id), size(size), cost(cost), 
+        decision_prediction(false), toCache(false), 
         lastSeenIndex(std::numeric_limits<uint64_t>::max()),
         lastSeenCount(lastSeenCount) {
     };
 
     trEntry(uint64_t seq, uint64_t id, uint64_t size, double cost, 
         uint64_t lastSeenIndex, int lastSeenCount) :
-        seq(seq), id(id), size(size), cost(cost), toCache(false), 
+        seq(seq), id(id), size(size), cost(cost), 
+        decision_prediction(false), toCache(false), 
         lastSeenIndex(lastSeenIndex), lastSeenCount(lastSeenCount) {
     };
 };
