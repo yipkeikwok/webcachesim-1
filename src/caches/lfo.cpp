@@ -175,6 +175,7 @@ bool LFOCache::lookup(SimpleRequest& req)
             hit(it, rehit_probability);
             */
             if(rehit_probability<(double).5) {
+                LFO::windowTrace.end()->decision_prediction=false;
                 // evict hit object
                 KeyT evicted_req_id = evict();
 
@@ -189,6 +190,14 @@ bool LFOCache::lookup(SimpleRequest& req)
                     std::exit(EXIT_FAILURE);
                 }
                 /** TESTING_CODE::end */
+            } else {
+                /** TESTING_CODE::beginning */
+                if(rehit_probability<(double).5) {
+                    std::cerr<<"rehit_probability should >= .5"<<std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                /** TESTING_CODE::end */
+                LFO::windowTrace.end()->decision_prediction=true;
             }
         } else {
             // log miss
@@ -230,7 +239,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     #if 0
     #endif
     std::ofstream decision_file;
-    decision_file.open("calculateOPT.decision.202012241635.txt", 
+    decision_file.open("calculateOPT.decision.202012291411.txt", 
         std::ios_base::app);
     for(auto it: LFO::windowTrace) {
         decision_file
@@ -324,6 +333,24 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     indptr.clear();
     indices.clear();
     data.clear();
+
+    /** EVALUATING MODEL ACCURACY::beginning */
+    uint64_t nr_prediction = (uint64_t)0;
+    uint64_t nr_correct = (uint64_t)0;
+    for(const trEntry entry0 : windowTrace) {
+        nr_prediction++;
+        if(entry0.decision_prediction == entry0.toCache) 
+            nr_correct++;
+    }
+    if(nr_prediction != windowTrace.size()) {
+        std::cerr<<"conclude_window(): nr_prediction should == window.size()"
+            <<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    std::cerr<<"Window"<<LFO::train_seq/LFO::windowSize-1<<" accuracy= "
+        << (float)nr_correct/nr_prediction << std::endl;
+
+    /** EVALUATING MODEL ACCURACY::end */
 
     LFO::windowByteSum=(uint64_t)0; 
     LFO::statistics.clear();
@@ -426,8 +453,10 @@ void LFOCache::admit(SimpleRequest& req)
         req, getSize()-getCurrentSize(), _objective
         );
     if(rehit_probability<(double).5) {
+        LFO::windowTrace.end()->decision_prediction==false;
         return;
     }
+    LFO::windowTrace.end()->decision_prediction==true;
 
     // check eviction needed
     while (_currentSize + size > _cacheSize) {
