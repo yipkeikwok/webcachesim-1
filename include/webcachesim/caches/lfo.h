@@ -106,8 +106,10 @@ namespace LFO {
     std::uniform_real_distribution<> dis(0.0, 1.0);
     //nmbr of rqst arrived so far
     uint64_t train_seq=(uint64_t)0;
-    const uint64_t windowSize=(uint64_t)1000000; 
+    const uint64_t windowSize=(uint64_t)2000000; 
+    #ifdef VERIFY_ACCURACY_CALCULATION
     std::array<bool, windowSize> decision_array;
+    #endif
     int sampling=1;
     bool init = true;
     BoosterHandle booster;

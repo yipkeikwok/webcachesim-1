@@ -176,7 +176,9 @@ bool LFOCache::lookup(SimpleRequest& req)
             */
             if(rehit_probability<(double).5) {
                 LFO::windowTrace.end()->decision_prediction=false;
+                #ifdef VERIFY_ACCURACY_CALCULATION
                 LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
+                #endif
                 // evict hit object
                 KeyT evicted_req_id = evict();
 
@@ -199,7 +201,9 @@ bool LFOCache::lookup(SimpleRequest& req)
                 }
                 /** TESTING_CODE::end */
                 LFO::windowTrace.end()->decision_prediction=true;
+                #ifdef VERIFY_ACCURACY_CALCULATION
                 LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
+                #endif
             }
         } else {
             // log miss
@@ -340,12 +344,14 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     uint64_t nr_prediction = (uint64_t)0;
     uint64_t nr_correct = (uint64_t)0;
     for(const trEntry entry0 : windowTrace) {
+        #ifdef VERIFY_ACCURACY_CALCULATION
         if(entry0.decision_prediction != LFO::decision_array[nr_prediction]) {
             std::cerr
                 <<"entry0.decision_prediction != LFO::decision_array["
                 <<nr_prediction<<"]";
             std::exit(EXIT_FAILURE);
         }
+        #endif
         nr_prediction++;
         if(entry0.decision_prediction == entry0.toCache) 
             nr_correct++;
@@ -462,11 +468,15 @@ void LFOCache::admit(SimpleRequest& req)
         );
     if(rehit_probability<(double).5) {
         LFO::windowTrace.end()->decision_prediction=false;
+        #ifdef VERIFY_ACCURACY_CALCULATION
         LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
+        #endif
         return;
     }
     LFO::windowTrace.end()->decision_prediction=true;
+    #ifdef VERIFY_ACCURACY_CALCULATION
     LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
+    #endif
 
     // check eviction needed
     while (_currentSize + size > _cacheSize) {
