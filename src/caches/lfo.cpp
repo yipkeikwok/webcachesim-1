@@ -176,6 +176,7 @@ bool LFOCache::lookup(SimpleRequest& req)
             */
             if(rehit_probability<(double).5) {
                 LFO::windowTrace.end()->decision_prediction=false;
+                LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
                 // evict hit object
                 KeyT evicted_req_id = evict();
 
@@ -198,6 +199,7 @@ bool LFOCache::lookup(SimpleRequest& req)
                 }
                 /** TESTING_CODE::end */
                 LFO::windowTrace.end()->decision_prediction=true;
+                LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
             }
         } else {
             // log miss
@@ -239,7 +241,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     #if 0
     #endif
     std::ofstream decision_file;
-    decision_file.open("calculateOPT.decision.202012291411.txt", 
+    decision_file.open("calculateOPT.decision.202012301723.txt", 
         std::ios_base::app);
     for(auto it: LFO::windowTrace) {
         decision_file
@@ -338,6 +340,12 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     uint64_t nr_prediction = (uint64_t)0;
     uint64_t nr_correct = (uint64_t)0;
     for(const trEntry entry0 : windowTrace) {
+        if(entry0.decision_prediction != LFO::decision_array[nr_prediction]) {
+            std::cerr
+                <<"entry0.decision_prediction != LFO::decision_array["
+                <<nr_prediction<<"]";
+            std::exit(EXIT_FAILURE);
+        }
         nr_prediction++;
         if(entry0.decision_prediction == entry0.toCache) 
             nr_correct++;
@@ -453,10 +461,12 @@ void LFOCache::admit(SimpleRequest& req)
         req, getSize()-getCurrentSize(), _objective
         );
     if(rehit_probability<(double).5) {
-        LFO::windowTrace.end()->decision_prediction==false;
+        LFO::windowTrace.end()->decision_prediction=false;
+        LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
         return;
     }
-    LFO::windowTrace.end()->decision_prediction==true;
+    LFO::windowTrace.end()->decision_prediction=true;
+    LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
 
     // check eviction needed
     while (_currentSize + size > _cacheSize) {

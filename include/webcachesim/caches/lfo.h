@@ -7,6 +7,7 @@
 #include <boost/functional/hash.hpp>
 #include <unordered_set>
 #include <utility>
+#include <array> // std::array<bool, windowSize>
 #include <string>
 #include <list>
 #include <random>
@@ -105,7 +106,8 @@ namespace LFO {
     std::uniform_real_distribution<> dis(0.0, 1.0);
     //nmbr of rqst arrived so far
     uint64_t train_seq=(uint64_t)0;
-    uint64_t windowSize=(uint64_t)1000000; 
+    const uint64_t windowSize=(uint64_t)1000000; 
+    std::array<bool, windowSize> decision_array;
     int sampling=1;
     bool init = true;
     BoosterHandle booster;
