@@ -1,7 +1,9 @@
 #include <random>
 #include <utility>
 #include <cmath>
+#include <ctime> // std::asctime(), std::localtime()
 #include <string>
+#include <sstream> // std::stringstream
 #include <unordered_map> // latest_decision
 /**
 // NDEBUG is defined somewhere in this application. I do not know where.
@@ -48,6 +50,11 @@ LFOCache::LFOCache()
     : Cache(), 
       _objective(0)
 {
+    std::time_t result = std::time(nullptr);
+    std::asctime(std::localtime(&result));
+    std::stringstream stringstream0;
+    stringstream0<<result;
+    stringstream0>>LFO::timestamp;
 }
 
 bool LFOCache::lookup(SimpleRequest& req)
@@ -211,9 +218,11 @@ bool LFOCache::lookup(SimpleRequest& req)
         }
     }
 
+    /**
     std::cerr
         <<"lookup(): "<<LFO::init<<" "<<LFO::train_seq<<" "<<req._id<<" "
         <<req._size<<" "<<in_cache<<std::endl;
+    */
     return in_cache;
 }
 
@@ -243,7 +252,6 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
 
     /** exporting calculateOPT() decisions::beginning */
     #if 0
-    #endif
     std::ofstream decision_file;
     decision_file.open("calculateOPT.decision.202012301723.txt", 
         std::ios_base::app);
@@ -255,6 +263,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
         decision_file<<std::endl;
     }
     decision_file.close();
+    #endif
     /** exporting calculateOPT() decisions::end */
 
     /** 
@@ -1262,7 +1271,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             } else {
                 std::cerr<<"no defined value for it.toCache"<<std::endl;
                 std::exit(1);
-            }
+            } // if(it.toCache) 
             latest_decision[it.id]=it.toCache; 
             // cost
             indices.push_back(HISTFEATURES + 2);
@@ -1390,6 +1399,71 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         << std::endl;
     */
     /** TESTING_CODE::end */
+
+    /** EXPORTING TRAINING DATA::beginning */
+    std::stringstream stringstream0; 
+    stringstream0<<"training_data."<<LFO::timestamp
+        <<".window"<<(LFO::train_seq/LFO::windowSize)-1
+        <<".txt";
+    std::string training_data_filename;
+    stringstream0>>training_data_filename;
+    std::ofstream training_data_ofstream;
+    training_data_ofstream.open(training_data_filename, std::ios_base::app);
+    if(!(indptr.size() == labels.size()+1)) {
+        std::cerr<<"indptr.size() should == labels.size()+1";
+        std::exit(EXIT_FAILURE);
+    }
+    #if 0
+    int loop_index_level0=0;
+    for(std::int32_t indptr0: indptr) {
+        if(indptr0==indptr.back()) break;
+        std::cerr<<"loop_index_level= "<<loop_index_level0++<<" ";
+        int loop_index_level1=0;
+        for(float label: labels) {
+            std::cerr<<loop_index_level1++<<" ";
+            training_data_ofstream<<label;
+            std::int32_t index0;
+            for(index0=indptr0; indices[index0]<HISTFEATURES; index0++) {
+                std::cerr<<index0<<" ";
+                training_data_ofstream<<'\t'<<data[index0];
+            }
+            for(int j=0; j<NR_NON_TIMEGAP_ELMNT; j++) {
+                if(!(indices[index0]>=HISTFEATURES)) {
+                    std::cerr<<"indices[index0]>=HISTFEATURES";
+                    std::exit(EXIT_FAILURE);
+                }
+                std::cerr<<index0+j<<" ";
+                training_data_ofstream<<'\t'<<data[index0+j];
+            }
+            training_data_ofstream<<std::endl;
+        }
+        std::cerr<<std::endl;
+    }
+    #endif
+    size_t window_index = (size_t)0;
+    for(float label: labels) {
+        training_data_ofstream<<label<<'\t'<<indptr[window_index];
+        if(!(indices[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT]==HISTFEATURES
+            )) {
+            std::cerr<<"indices[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT] ";
+            std::cerr<<"should==HISTFEATURES";
+            std::exit(EXIT_FAILURE);
+        }
+        training_data_ofstream<<'\t'
+            <<data[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT];
+        training_data_ofstream<<'\t'
+            <<data[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT+1];
+        training_data_ofstream<<'\t'
+            <<windowTrace[window_index].size;
+        training_data_ofstream<<std::endl;
+        window_index++;
+    }
+    if(!(window_index==LFO::windowSize)) {
+        std::cerr<<"window_index should==LFO::windowSize";
+        std::exit(EXIT_FAILURE);
+    }
+    training_data_ofstream.close();
+    /** EXPORTING TRAINING DATA::end */
     LGBM_DatasetCreateFromCSR(
         static_cast<void *>(indptr.data()), C_API_DTYPE_INT32, 
         indices.data(), 

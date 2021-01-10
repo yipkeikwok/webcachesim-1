@@ -99,6 +99,8 @@ namespace LFO {
     */
     /** TESTING_CODE::cnt_quartile::end */
 
+    //seconds since the Epoch when simulation begins
+    std::string timestamp;
     //Will be used to obtain a seed for the random number engine
     std::random_device rd;
     //Standard mersenne_twister_engine seeded with rd()
@@ -106,7 +108,7 @@ namespace LFO {
     std::uniform_real_distribution<> dis(0.0, 1.0);
     //nmbr of rqst arrived so far
     uint64_t train_seq=(uint64_t)0;
-    const uint64_t windowSize=(uint64_t)2000000; 
+    const uint64_t windowSize=(uint64_t)1000000; 
     #ifdef VERIFY_ACCURACY_CALCULATION
     std::array<bool, windowSize> decision_array;
     #endif
