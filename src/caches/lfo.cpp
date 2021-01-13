@@ -252,18 +252,21 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
 
     /** exporting calculateOPT() decisions::beginning */
     #if 0
-    std::ofstream decision_file;
-    decision_file.open("calculateOPT.decision.202012301723.txt", 
-        std::ios_base::app);
+    #endif
+    std::stringstream stringstream0;
+    stringstream0<<"calculateOPT.decision."<<LFO::timestamp<<".txt";
+    std::string decision_filename;
+    stringstream0>>decision_filename; 
+    std::ofstream decision_ofstream;
+    decision_ofstream.open(decision_filename, std::ios_base::app);
     for(auto it: LFO::windowTrace) {
-        decision_file
+        decision_ofstream
             <<it.seq<<" "
             <<it.id<<" "<<it.size<<" "<<it.toCache<<" "<<it.lastSeenIndex<<" "
             <<it.lastSeenCount; 
-        decision_file<<std::endl;
+        decision_ofstream<<std::endl;
     }
-    decision_file.close();
-    #endif
+    decision_ofstream.close();
     /** exporting calculateOPT() decisions::end */
 
     /** 
