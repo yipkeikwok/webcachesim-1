@@ -75,6 +75,9 @@ int main(int argc, char**argv) {
             boost::hash<std::pair<uint64_t, uint64_t>>
         > cacheMap;
     uint64_t sz_cache_capacity, sz_cache_remaining; 
+    // minimum remaining cache size in each window 
+    uint64_t sz_cache_remaining_min_window 
+        = std::numeric_limits<uint64_t>::max();
     sz_cache_capacity = sz_cache_remaining = std::stoul(argv[2], nullptr, 10); 
     std::cout<<"trace file:     "<<argv[1]<<std::endl; 
     std::cout<<"cache size remaining:     "<<sz_cache_remaining<<std::endl; 
@@ -207,6 +210,10 @@ int main(int argc, char**argv) {
                     cacheMap.count(id_size)==(size_t)1
                     );
                 sz_cache_remaining -= size;
+                if(sz_cache_remaining < sz_cache_remaining_min_window) {
+                    sz_cache_remaining_min_window=sz_cache_remaining; 
+                }
+                assert(sz_cache_remaining_min_window<=sz_cache_remaining);
             } else {
                 // in cache 
                 // action: none
@@ -242,7 +249,10 @@ int main(int argc, char**argv) {
                     <<", "
                     // If calculateOPT() is implemented correctly, 
                     //  cacheMap.size() should ==0 at end of each window 
-                    <<"cacheMap.size()= "<<cacheMap.size();
+                    <<"cacheMap.size()= "<<cacheMap.size()
+                    <<", "
+                    <<"min remaining cache sz= " 
+                        << sz_cache_remaining_min_window;
             if(cacheMap.size()) {
                     std::cout
                         <<", "
@@ -262,6 +272,7 @@ int main(int argc, char**argv) {
             #endif
             count_object_window=count_byte_window=hit_object_window
                 =hit_byte_window=(uint64_t)0; 
+            sz_cache_remaining_min_window=std::numeric_limits<uint64_t>::max();
         }
     } // while(ifstream_trace >> id >> size >> decision) 
     if(timestamp%sz_window) {
