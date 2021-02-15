@@ -18,6 +18,9 @@
 #include "lfo.h"
 #include "random_helper.h"
 
+#ifndef ISSUE20210206b
+#endif
+
 // golden section search helpers
 #define SHFT2(a,b,c) (a)=(b);(b)=(c);
 #define SHFT3(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
@@ -346,6 +349,54 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     }
     */
     /** TESTING_CODE::end */
+
+    /** 202101131442::beginning */
+    int window_id=(LFO::train_seq-1)/windowSize;
+    int window_index=window_id*100000;
+    uint64_t object_id=LFO::windowTrace[window_index].id;
+    std::list<uint64_t> statistics_list = LFO::statistics[object_id];
+    std::cerr<<"202101131442: "<<labels[window_index];
+    for(uint64_t timestamp0 : statistics_list) 
+        std::cerr<<'\t'<<timestamp0;
+    std::cerr<<'\t'<<statistics_list.size();
+    std::cerr<<'\t'<<object_id;
+    std::cerr<<std::endl;
+    /** 202101131442::end */
+
+    /** 202101211508::beginning */
+    int window_id1=(LFO::train_seq-1)/windowSize;
+    int window_index1=window_id1*100000;
+    uint64_t object_id1=LFO::windowTrace[window_index1].id;
+    int32_t indices_begin = indptr[window_index1]; 
+    if(!
+        (
+            (indices[indices_begin]==(int32_t) 0) 
+            #ifdef ISSUE20210206b
+            ||
+            (indices[indices_begin]==(int32_t)50)
+            #endif
+        )) {
+        std::cerr
+            <<"indices["<<indices_begin<<"]=="<<indices[indices_begin]
+            <<" should==(int32_t)0";
+        std::exit(EXIT_FAILURE);
+    }
+    std::cerr<<"202101211508:";
+    int32_t iter0;
+    for(
+        iter0=0;
+        indices[indices_begin+iter0]<HISTFEATURES;
+        iter0++) 
+        std::cerr<<'\t'<<data[indices_begin+iter0];
+    if(!(indices[indices_begin+iter0]==HISTFEATURES)) {
+        std::cerr<<"indices[indices_begin+iter0]==HISTFEATURES";
+        std::exit(EXIT_FAILURE);
+    }
+    std::cerr<<'\t'<<iter0;
+    std::cerr<<'\t'<<object_id1;
+    std::cerr<<std::endl;
+    /** 202101211508::end */
+
     LFO::trainModel(labels, indptr, indices, data);
     labels.clear();
     indptr.clear();
@@ -812,13 +863,48 @@ double LFO::calculate_rehit_probability(
         std::list<uint64_t>& curQueue = LFO::statistics[req._id];
         int32_t idx = 0; 
         uint64_t lastReqTime = (LFO::train_seq - 1)%LFO::windowSize; 
+        /** TESTING_CODE::beginning */
+        if(!(lastReqTime == *curQueue.begin())) {
+            std::cerr<<"calculate_rehit_probability(): ";
+            std::cerr<<"lastReqTime should== *curQueue.begin()";
+            std::cerr<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        /** TESTING_CODE::end */
         for(auto &lit: curQueue) {
             const uint64_t dist = lastReqTime - lit; 
+            /**
+            // 20210208::beginning
+            */
+            if(lastReqTime == lit) {
+                if(!(dist == 0)) {
+                    std::cerr<<"calculate_rehit_probability(): ";
+                    std::cerr<<"dist should== 0";
+                    std::exit(EXIT_FAILURE);
+                }
+                continue;
+            }
+            if(!(lastReqTime > lit)) {
+                std::cerr<<"calculate_rehit_probability(): "; 
+                std::cerr<<"lastReqTime should> lit";
+                std::exit(EXIT_FAILURE);
+            }
+            /**
+            // 20210208::end
+            */
             indices.push_back(idx); 
             data.push_back(dist);
             idx++;
             lastReqTime = lit;
         }
+        /** 202102141439::beginning */
+        if(idx==0) {
+            // the object is accessed for its 1st time in this window 
+            indices.push_back((int32_t)idx);
+            data.push_back((double)0);
+            idx++;
+        }
+        /** 202102141439::end */
         // object size
         indices.push_back(HISTFEATURES); 
         data.push_back(std::round(100*std::log2(req._size))); 
@@ -964,6 +1050,34 @@ double LFO::calculate_rehit_probability(
         /** TESTING_CODE::end */
         // so that result.data() does not return nullptr 
         result.reserve((size_t)4); 
+        if((
+            (LFO::train_seq-1)%(LFO::windowSize/10)
+            )==0) {
+            std::cerr
+                <<"Object ID= "      << req._id        << ", "
+                <<"Object Size= "    << req._size      << ", "
+                <<"indptr.size()= "  << indptr.size()  << ", "
+                <<"indices.size()= " << indices.size() << ", "
+                <<"curQueue.size()= " << curQueue.size() << ", "
+                <<"data.size()= "    << data.size()
+                <<std::endl;
+            std::cerr<<"indptr= ";
+            for(int i=0; i<indptr.size(); i++) 
+                std::cerr<<indptr[i]<<" ";
+            std::cerr<<std::endl;
+            std::cerr<<"indices= ";
+            for(int i=0; i<indices.size(); i++) 
+                std::cerr<<indices[i]<<" ";
+            std::cerr<<std::endl;
+            std::cerr<<"curQueue= ";
+            for(auto &lit: curQueue) 
+                std::cerr<<lit<<" ";
+            std::cerr<<std::endl;
+            std::cerr<<"data= ";
+            for(int i=0; i<data.size(); i++) 
+                std::cerr<<data[i]<<" ";
+            std::cerr<<std::endl;
+        } 
         int return_LGBM_BPFC= LGBM_BoosterPredictForCSR(
                 LFO::booster, 
                 static_cast<void *>(indptr.data()), 
@@ -1021,6 +1135,31 @@ double LFO::calculate_rehit_probability(
                 << return_LGBM_BPFC << std::endl; 
             std::exit(EXIT_FAILURE);
         }
+        /** 
+        if(req._id==4294793459) {
+            std::cerr
+                <<"Object ID= "      << req._id        << ", "
+                <<"Object Size= "    << req._size      << ", "
+                <<"indptr.size()= "  << indptr.size()  << ", "
+                <<"indices.size()= " << indices.size() << ", "
+                <<"data.size()= "    << data.size()
+                <<std::endl;
+            std::cerr<<"indptr= ";
+            for(int i=0; i<indptr.size(); i++) 
+                std::cerr<<indptr[i]<<" ";
+            std::cerr<<std::endl;
+            std::cerr<<"indices= ";
+            for(int i=0; i<indices.size(); i++) 
+                std::cerr<<indices[i]<<" ";
+            std::cerr<<std::endl;
+            std::cerr<<"data= ";
+            for(int i=0; i<data.size(); i++) 
+                std::cerr<<data[i]<<" ";
+            std::cerr<<std::endl;
+
+            std::exit(EXIT_SUCCESS);
+        }
+        */
         #if 0
         std::cerr<<"len_result= "<<len_result<< ", "<<result.data()
             <<", result[0]= "<<result[0] 
@@ -1114,7 +1253,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
     // -ve cache size below 0 by how much
     uint64_t negCacheSizeMax = (uint64_t)0;
 
-    uint64_t i = (uint64_t)0;
+    uint64_t iter0 = (uint64_t)0;
     indptr.push_back(0);
 
     // nmbr of samples taken during each window
@@ -1145,12 +1284,12 @@ void LFO::deriveFeatures(std::vector<float> &labels,
 
         bool flag = true;
         if(sampling == 1) {
-            // YK: i incremented in each for-loop iteration
+            // YK: iter0 incremented in each for-loop iteration
             // sampleSize is an element in map<string, string> params, an 
             //  argument of _simulation_lfo(). As on 2020071, since 
             // _simulation_lfo() not invoked in the code provided, I do not know
             // the value of sampleSize 
-            flag = i >= (windowSize - LFO::sampleSize);
+            flag = iter0 >= (windowSize - LFO::sampleSize);
         } else if (sampling == 2) {
             // uniform_real_distribution<> dis(0.0, 1.0);
             double rand = LFO::dis(LFO::gen);
@@ -1176,14 +1315,22 @@ void LFO::deriveFeatures(std::vector<float> &labels,
 
             // derive features
             int32_t idx = 0;
-            uint64_t lastReqTime = i;
+            uint64_t lastReqTime = iter0;
 
             /** TESTING_CODE::INDICES_GROWTH::beginning */
             uint64_t indices_size_old = (uint64_t)indices.size();
             /** TESTING_CODE::INDICES_GROWTH::end */
 
             //YK: curQueue: feature list of an object 
+
+            /** 
+            // indices[0]=data[0]=0
+            indices.push_back(idx); 
+            idx++;
+            data.push_back(0);
+            */
             for (auto &lit: curQueue) { 
+                if(!(lastReqTime > lit)) break;
                 const uint64_t dist = lastReqTime - lit; // distance
                 // YK: std::vector::push_back(): append to the end 
                 indices.push_back(idx);
@@ -1216,15 +1363,24 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             }
             /** TESTING_CODE::INDICES_GROWTH::beginning */
             uint64_t indices_growth = indices.size()-indices_size_old;
-            if(indices_growth!=(uint64_t)curQueue.size()) {
+            if(indices_growth!=(uint64_t)idx) {
                 std::cerr<<"TESTING_CODE::INDICES_GROWTH failed"<<std::endl;
                 std::exit(EXIT_FAILURE);
             }
             if(!(indices_growth<=HISTFEATURES)) {
                 std::cerr<<"indices_growth should <= HISTFEATURES"<<std::endl;
+                std::cerr<<"indices_growth= "<<indices_growth<<std::endl;
                 std::exit(EXIT_FAILURE);
             }
             /** TESTING_CODE::INDICES_GROWTH::end */
+
+            /** 202102141439::beginning */
+            if(idx==0) {
+                indices.push_back((int32_t)0);
+                data.push_back((double)0);
+                idx++;
+            }
+            /** 202102141439::end */
 
             // object size
             indices.push_back(HISTFEATURES);
@@ -1304,7 +1460,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             */
             uint64_t indices_size_expected = (uint64_t)0;
             indices_size_expected += indices_size_old;
-            indices_size_expected += (uint64_t)curQueue.size();
+            indices_size_expected += (uint64_t)idx;
             indices_size_expected += (uint64_t)NR_NON_TIMEGAP_ELMNT;
             if(indices.size() != indices_size_expected) {
                 std::cerr
@@ -1316,7 +1472,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             }
             /**
             */
-            expected_indices_size+= (uint64_t)curQueue.size();
+            expected_indices_size+= (uint64_t)idx;
             expected_indices_size+= (uint64_t)NR_NON_TIMEGAP_ELMNT;
             /** TESTING_CODE::verifying indices.size()::end */
             indptr.push_back(indptr[indptr.size() - 1] + idx 
@@ -1346,7 +1502,7 @@ void LFO::deriveFeatures(std::vector<float> &labels,
         }
 
         // update queue
-        curQueue.push_front(i++);
+        curQueue.push_front(iter0++);
     } //for(auto &it: windowTrace) 
 
     /** TESTING_CODE::beginning */
@@ -1445,7 +1601,22 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
     #endif
     size_t window_index = (size_t)0;
     for(float label: labels) {
-        training_data_ofstream<<label<<'\t'<<indptr[window_index];
+        training_data_ofstream<<label;
+        size_t iter0;
+        for(iter0=indptr[window_index]; indices[iter0]<HISTFEATURES; iter0++) {
+            training_data_ofstream<<'\t'<<data[iter0];
+        }
+        if(!(indices[iter0]==HISTFEATURES)) {
+            std::cerr<<"indices[iter0] should ==HISTFEATURES";
+            std::exit(EXIT_FAILURE);
+        }
+        for(; iter0<indptr[window_index]+HISTFEATURES; iter0++) {
+            training_data_ofstream<<'\t'<<"NA";
+        }
+        if(!(iter0==indptr[window_index]+HISTFEATURES)) {
+            std::cerr<<"iter0 should== indptr[window_index]+HISTFEATURES";
+            std::exit(EXIT_FAILURE);
+        }
         if(!(indices[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT]==HISTFEATURES
             )) {
             std::cerr<<"indices[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT] ";
@@ -1457,7 +1628,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         training_data_ofstream<<'\t'
             <<data[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT+1];
         training_data_ofstream<<'\t'
-            <<windowTrace[window_index].size;
+            <<data[indptr[window_index+1]-NR_NON_TIMEGAP_ELMNT+2];
         training_data_ofstream<<std::endl;
         window_index++;
     }
