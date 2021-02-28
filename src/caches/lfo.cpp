@@ -912,7 +912,8 @@ double LFO::calculate_rehit_probability(
         indices.push_back(HISTFEATURES+1); 
         double currentSize = cacheAvailBytes <= 0 ? 0 : 
             std::round(100*std::log2(cacheAvailBytes));
-        data.push_back(std::round(100*std::log2(currentSize))); 
+        //data.push_back(std::round(100*std::log2(currentSize))); 
+        data.push_back(currentSize);
         // cost 
         indices.push_back(HISTFEATURES+2);
         /** TESTING_CODE::beginning */
