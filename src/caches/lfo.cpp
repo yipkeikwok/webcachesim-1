@@ -308,6 +308,21 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     std::vector<int32_t> indices;
     std::vector<double> data;
 
+    #if 0
+    /** 202102281620::beginning */
+    int window_id=(LFO::train_seq-1)/windowSize;
+    int window_index=window_id*100000;
+    uint64_t object_id=LFO::windowTrace[window_index].id;
+    std::list<uint64_t> statistics_list = LFO::statistics[object_id];
+    std::cerr<<"202102281620:"; 
+    for(uint64_t timestamp0 : statistics_list) 
+        std::cerr<<'\t'<<timestamp0;
+    std::cerr<<'\t'<<statistics_list.size();
+    std::cerr<<'\t'<<object_id;
+    std::cerr<<std::endl;
+    /** 202102281620::end */
+    #endif
+
     LFO::deriveFeatures(labels, indptr, indices, data, LFO::sampling, 
         cache_size
         );
@@ -350,6 +365,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     */
     /** TESTING_CODE::end */
 
+    #if 0
     /** 202101131442::beginning */
     int window_id=(LFO::train_seq-1)/windowSize;
     int window_index=window_id*100000;
@@ -362,6 +378,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     std::cerr<<'\t'<<object_id;
     std::cerr<<std::endl;
     /** 202101131442::end */
+    #endif
 
     /** 202101211508::beginning */
     int window_id1=(LFO::train_seq-1)/windowSize;
@@ -1542,6 +1559,22 @@ void LFO::deriveFeatures(std::vector<float> &labels,
     std::cerr<<"* indptr.size()= "<<indptr.size()<<std::endl;
     std::cerr<<"* indices.size()= "<<indices.size()<<std::endl;
     std::cerr<<"* data.size()= "<<data.size()<<std::endl;
+
+    #if 0
+    /** 202103030909::beginning */
+    int window_id0=(LFO::train_seq-1)/windowSize;
+    int sampled_windowTrace_index0=window_id0*(windowSize/10);
+    std::cerr<<"202103041315:";
+    for(
+        uint64_t index0=indptr[sampled_windowTrace_index0]; 
+        index0<indptr[sampled_windowTrace_index0+1]; 
+        index0++) { 
+        std::cerr<<'\t'<<data[index0];
+    }
+    std::cerr<<'\n';
+    /** 202103030909::end */
+    #endif
+
 }
 
 void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr, 
