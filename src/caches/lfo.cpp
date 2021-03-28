@@ -1297,6 +1297,10 @@ void LFO::deriveFeatures(std::vector<float> &labels,
         auto &curQueue = statistics[it.id];
         const auto curQueueLen = curQueue.size();
         if(curQueueLen > HISTFEATURES) {
+            if(!(curQueueLen==HISTFEATURES+1)) {
+                std::cerr<<"curQueueLen should== HISTFEATURES+1";
+                std::exit(-1);
+            }
             curQueue.pop_back();
         }
 
