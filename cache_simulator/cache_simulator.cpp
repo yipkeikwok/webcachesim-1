@@ -163,14 +163,14 @@ int main(int argc, char**argv) {
         }
         window_last_seen[id_size]=index;
         index++;
+        #ifdef EXPORT_REMAINING_CACHE_SIZE 
+        std::cerr<<sz_cache_remaining<<std::endl;
+        #endif
         if(!decision) {
             if(!lookup(id, size, timestamp, cacheMap, hit_object_window, &hit_byte_window
                     )
                 ) {
                 // not in cache 
-                #ifdef EXPORT_REMAINING_CACHE_SIZE
-                std::cerr<<sz_cache_remaining<<std::endl;
-                #endif
             } else {
                 // in cache 
                 if(!(sz_cache_remaining + size <= sz_cache_capacity)) {
@@ -194,9 +194,6 @@ int main(int argc, char**argv) {
                     std::exit(EXIT_FAILURE);
                 }
                 sz_cache_remaining += size;
-                #ifdef EXPORT_REMAINING_CACHE_SIZE
-                std::cerr<<sz_cache_remaining<<std::endl;
-                #endif
             }
         } else if(decision==1) {
             if(!lookup(id, size, timestamp, cacheMap, hit_object_window, &hit_byte_window
@@ -221,9 +218,6 @@ int main(int argc, char**argv) {
                     sz_cache_remaining_min_window=sz_cache_remaining; 
                 }
                 assert(sz_cache_remaining_min_window<=sz_cache_remaining);
-                #ifdef EXPORT_REMAINING_CACHE_SIZE
-                std::cerr<<sz_cache_remaining<<std::endl;
-                #endif
             } else {
                 // in cache 
                 // action: none
@@ -232,9 +226,6 @@ int main(int argc, char**argv) {
                 #endif
                 hit_object_overall++;
                 hit_byte_overall  +=size;
-                #ifdef EXPORT_REMAINING_CACHE_SIZE
-                std::cerr<<sz_cache_remaining<<std::endl;
-                #endif
             }
         } else {
             std::cerr<<"Invalid decision (2nd check): "<<decision<<std::endl;
