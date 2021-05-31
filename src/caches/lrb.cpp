@@ -7,6 +7,8 @@
 #include "utils.h"
 #include <chrono>
 
+#include "param_helper.h"
+
 using namespace chrono;
 using namespace std;
 using namespace lrb;
@@ -18,6 +20,10 @@ void LRBCache::train() {
         LGBM_BoosterFree(booster);
     // create training dataset
     DatasetHandle trainData;
+
+	std::string params = param_map_to_string(training_params);
+
+
     LGBM_DatasetCreateFromCSR(
             static_cast<void *>(training_data->indptr.data()),
             C_API_DTYPE_INT32,
@@ -27,7 +33,7 @@ void LRBCache::train() {
             training_data->indptr.size(),
             training_data->data.size(),
             n_feature,  //remove future t
-            training_params,
+            params.c_str(),
             nullptr,
             &trainData);
 
@@ -38,7 +44,7 @@ void LRBCache::train() {
                          C_API_DTYPE_FLOAT32);
 
     // init booster
-    LGBM_BoosterCreate(trainData, training_params, &booster);
+    LGBM_BoosterCreate(trainData, params.c_str(), &booster);
     // train
     for (int i = 0; i < stoi(training_params["num_iterations"]); i++) {
         int isFinished;
@@ -61,7 +67,8 @@ void LRBCache::train() {
                               n_feature,  //remove future t
                               C_API_PREDICT_NORMAL,
                               0,
-                              training_params,
+			      0,
+	                        params.c_str(),
                               &len,
                               result.data());
 
@@ -468,6 +475,8 @@ pair<uint64_t, uint32_t> LRBCache::rank() {
     //sample to measure inference time
     if (!(current_t % 10000))
         timeBegin = chrono::system_clock::now();
+
+    std::string params = param_map_to_string(inference_params);
     LGBM_BoosterPredictForCSR(booster,
                               static_cast<void *>(indptr),
                               C_API_DTYPE_INT32,
@@ -479,7 +488,8 @@ pair<uint64_t, uint32_t> LRBCache::rank() {
                               n_feature,  //remove future t
                               C_API_PREDICT_NORMAL,
                               0,
-                              inference_params,
+			      0,
+	                	params.c_str(),
                               &len,
                               scores);
     if (!(current_t % 10000))

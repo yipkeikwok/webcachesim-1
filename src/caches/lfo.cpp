@@ -17,6 +17,7 @@
 #include <LightGBM/c_api.h>
 #include "lfo.h"
 #include "random_helper.h"
+#include "param_helper.h"
 
 #ifndef ISSUE20210206b
 #endif
@@ -1096,6 +1097,14 @@ double LFO::calculate_rehit_probability(
                 std::cerr<<data[i]<<" ";
             std::cerr<<std::endl;
         } 
+
+	//
+	// Added by David on 2021-05-10
+	//
+	
+	std::string params = param_map_to_string(LFO::trainParams);
+
+
         int return_LGBM_BPFC= LGBM_BoosterPredictForCSR(
                 LFO::booster, 
                 static_cast<void *>(indptr.data()), 
@@ -1105,11 +1114,12 @@ double LFO::calculate_rehit_probability(
                 C_API_DTYPE_FLOAT64,
                 indptr.size(), 
                 data.size(), 
+                HISTFEATURES+NR_NON_TIMEGAP_ELMNT, /** num_col */
                 C_API_PREDICT_NORMAL, 
                 //since only 1 row HISTFEATURES + NR_NON_TIMEGAP_ELMNT,
-                data.size(), 
-                0, 
-                LFO::trainParams, 
+		        0, /** start_iteration */
+                0, /** num_iteration */
+                params.c_str(), 
                 &len_result, 
                 result.data()
                 );
@@ -1676,6 +1686,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
     }
     training_data_ofstream.close();
     /** EXPORTING TRAINING DATA::end */
+    std::string params = param_map_to_string(LFO::trainParams);
     LGBM_DatasetCreateFromCSR(
         static_cast<void *>(indptr.data()), C_API_DTYPE_INT32, 
         indices.data(), 
@@ -1683,7 +1694,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         indptr.size(), 
         data.size(), 
         HISTFEATURES + 3, 
-        LFO::trainParams, nullptr, &trainData);
+        params.c_str(), nullptr, &trainData);
     /** TESTING_CODE::Dumping DatasetHandle trainData::beginning */
     int num_data; // no. of data points
     LGBM_DatasetGetNumData(trainData, &num_data); 
@@ -1705,7 +1716,8 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         */
         /** TESTING_CODE::end */
         // init booster //YK: create a new boosting learner
-        LGBM_BoosterCreate(trainData, LFO::trainParams, &LFO::booster);
+    	std::string params = param_map_to_string(LFO::trainParams);
+        LGBM_BoosterCreate(trainData, params.c_str(), &LFO::booster);
         // train
         for (int i = 0; i < std::stoi(LFO::trainParams["num_iterations"]); 
             i++) {
@@ -1720,7 +1732,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         int64_t out_len;
         if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
             // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
-            1000000, &out_len, booster_dump)) {
+            1000000, C_API_FEATURE_IMPORTANCE_SPLIT, &out_len, booster_dump)) {
             std::cerr
                 <<"LFO::trainModel()::init==true::"
                 <<"out_len= "<<out_len<<", "
@@ -1740,7 +1752,8 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         */
         /** TESTING_CODE::end */
         BoosterHandle newBooster;
-        LGBM_BoosterCreate(trainData, LFO::trainParams, &newBooster);
+        std::string params = param_map_to_string(LFO::trainParams);
+        LGBM_BoosterCreate(trainData, params.c_str(), &newBooster);
         #ifdef MODEL_REFITTING 
         int64_t len;
         //YK: get number of predictions 
@@ -1781,7 +1794,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         int64_t out_len;
         if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
             // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
-            1000000, &out_len, booster_dump)) {
+            1000000, C_API_FEATURE_IMPORTANCE_SPLIT, &out_len, booster_dump)) {
             std::cerr
                 <<"LFO::trainModel()::init==false::"
                 <<"out_len= "<<out_len<<", "

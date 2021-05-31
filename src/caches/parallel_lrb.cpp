@@ -3,6 +3,7 @@
 //
 
 #include "parallel_lrb.h"
+#include "param_helper.h"
 
 void ParallelLRBCache::train() {
 //        auto timeBegin = std::chrono::system_clock::now();
@@ -10,6 +11,8 @@ void ParallelLRBCache::train() {
     DatasetHandle trainData;
 
     BoosterHandle background_booster = nullptr;
+
+    	std::string params = param_map_to_string(LRB_train_params);
 
     LGBM_DatasetCreateFromCSR(
             static_cast<void *>(background_training_data->indptr.data()),
@@ -20,7 +23,7 @@ void ParallelLRBCache::train() {
             background_training_data->indptr.size(),
             background_training_data->data.size(),
             ParallelLRB::n_feature,  //remove future t
-            LRB_train_params,
+            params.c_str(),
             nullptr,
             &trainData);
 
@@ -31,7 +34,7 @@ void ParallelLRBCache::train() {
                          C_API_DTYPE_FLOAT32);
 
     // init booster
-    LGBM_BoosterCreate(trainData, LRB_train_params, &background_booster);
+    LGBM_BoosterCreate(trainData, params.c_str(), &background_booster);
 
     // train
     for (int i = 0; i < stoi(LRB_train_params["num_iterations"]); i++) {
@@ -339,6 +342,7 @@ pair<uint64_t, uint32_t> ParallelLRBCache::rank() {
     std::vector<double> result(sample_rate);
 //    auto time_begin = std::chrono::system_clock::now();
     booster_mutex.lock();
+    std::string params = param_map_to_string(LRB_inference_params);
     LGBM_BoosterPredictForCSR(booster,
                               static_cast<void *>(indptr),
                               C_API_DTYPE_INT32,
@@ -350,7 +354,8 @@ pair<uint64_t, uint32_t> ParallelLRBCache::rank() {
                               ParallelLRB::n_feature,  //remove future t
                               C_API_PREDICT_NORMAL,
                               0,
-                              LRB_inference_params,
+			      0,
+                              params.c_str(),
                               &len,
                               result.data());
     booster_mutex.unlock();
