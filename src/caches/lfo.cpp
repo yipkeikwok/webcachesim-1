@@ -916,12 +916,15 @@ double LFO::calculate_rehit_probability(
             lastReqTime = lit;
         }
         /** 202102141439::beginning */
+        #if 0
+        /** no longer needed since switching to standard LGBM */
         if(idx==0) {
             // the object is accessed for its 1st time in this window 
             indices.push_back((int32_t)idx);
             data.push_back((double)0);
             idx++;
         }
+        #endif
         /** 202102141439::end */
         // object size
         indices.push_back(HISTFEATURES); 
@@ -985,8 +988,8 @@ double LFO::calculate_rehit_probability(
         int return_BDM = LGBM_BoosterDumpModel(
             LFO::booster, 
             0, 
-            1, 
-            // 0, //C_API_FEATURE_IMPORTANCE_SPLIT
+            -1, 
+            C_API_FEATURE_IMPORTANCE_SPLIT
             (int64_t) 1024*1024,
             &out_len, 
             out_str
@@ -1730,9 +1733,14 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         }
         char booster_dump[1000000];
         int64_t out_len;
-        if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
-            // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
-            1000000, C_API_FEATURE_IMPORTANCE_SPLIT, &out_len, booster_dump)) {
+        if(!LGBM_BoosterDumpModel(
+            LFO::booster, 
+            0, 
+            -1, 
+            C_API_FEATURE_IMPORTANCE_SPLIT, 
+            (int64_t)1000000, 
+            &out_len, 
+            booster_dump)) {
             std::cerr
                 <<"LFO::trainModel()::init==true::"
                 <<"out_len= "<<out_len<<", "
@@ -1792,9 +1800,14 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
 
         char booster_dump[1000000];
         int64_t out_len;
-        if(!LGBM_BoosterDumpModel(LFO::booster, 0, -1, 
-            // 1, // C_API_FEATURE_IMPORTANCE_SPLIT
-            1000000, C_API_FEATURE_IMPORTANCE_SPLIT, &out_len, booster_dump)) {
+        if(!LGBM_BoosterDumpModel(
+                LFO::booster, 
+                0, 
+                -1, 
+                C_API_FEATURE_IMPORTANCE_SPLIT, 
+                (int64_t)1000000,
+                &out_len, 
+                booster_dump)) {
             std::cerr
                 <<"LFO::trainModel()::init==false::"
                 <<"out_len= "<<out_len<<", "
