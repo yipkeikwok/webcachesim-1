@@ -20,6 +20,7 @@
 #include "param_helper.h"
 
 #ifndef ISSUE20210206b
+#define ISSUE20210206b
 #endif
 
 // golden section search helpers
@@ -396,7 +397,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
         )) {
         std::cerr
             <<"indices["<<indices_begin<<"]=="<<indices[indices_begin]
-            <<" should==(int32_t)0";
+            <<" should==(int32_t)0 or 50";
         std::exit(EXIT_FAILURE);
     }
     std::cerr<<"202101211508:";
@@ -1410,11 +1411,13 @@ void LFO::deriveFeatures(std::vector<float> &labels,
             /** TESTING_CODE::INDICES_GROWTH::end */
 
             /** 202102141439::beginning */
+            #if 0
             if(idx==0) {
                 indices.push_back((int32_t)0);
                 data.push_back((double)0);
                 idx++;
             }
+            #endif
             /** 202102141439::end */
 
             // object size
