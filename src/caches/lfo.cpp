@@ -23,6 +23,10 @@
 #define ISSUE20210206b
 #endif
 
+#ifndef EXPORT_MODEL
+#define EXPORT_MODEL
+#endif
+
 // golden section search helpers
 #define SHFT2(a,b,c) (a)=(b);(b)=(c);
 #define SHFT3(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
@@ -447,6 +451,27 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
         << (float)nr_correct/nr_prediction << std::endl;
 
     /** EVALUATING MODEL ACCURACY::end */
+
+    #ifdef EXPORT_MODEL 
+    char model_filename[1024];
+    std::stringstream model_filename_stringstream0;
+    model_filename_stringstream0<<"model_for_window"
+        <<LFO::train_seq/LFO::windowSize<<"."<<LFO::timestamp<<".txt";
+    model_filename_stringstream0>>model_filename;
+    if(!(
+        LGBM_BoosterSaveModel(
+            LFO::booster, 
+            0, 
+            0, 
+            C_API_FEATURE_IMPORTANCE_SPLIT,
+            model_filename
+        )==0)) {
+        /** FAILURE */
+        std::cerr<<"conclude_window():LGBM_BoosterSaveModel() failed"
+            <<std::endl;
+        exit(EXIT_FAILURE);
+    }
+    #endif
 
     LFO::windowByteSum=(uint64_t)0; 
     LFO::statistics.clear();
