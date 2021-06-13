@@ -27,6 +27,10 @@
 #define EXPORT_MODEL
 #endif
 
+#ifndef EXPORT_PREDICTION_INPUT
+#define EXPORT_PREDICTION_INPUT
+#endif
+
 // golden section search helpers
 #define SHFT2(a,b,c) (a)=(b);(b)=(c);
 #define SHFT3(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
@@ -1133,6 +1137,70 @@ double LFO::calculate_rehit_probability(
 	
 	std::string params = param_map_to_string(LFO::trainParams);
 
+    /** check for correctness::beginning */
+    if(!(data.size()==curQueue.size()-1+NR_NON_TIMEGAP_ELMNT)) {
+        std::cerr
+            <<"calculate_rehit_probability(): "
+            <<"data.size() should ==curQueue.size()-1+NR_NON_TIMEGAP_ELEMNT"
+            <<std::endl;
+        std::cerr<<"data.size()= "<<data.size()<<std::endl;
+        std::cerr<<"curQueue.size()= "<<curQueue.size()<<std::endl;
+        std::cerr<<"NR_NON_TIMEGAP_ELMNT= "<<NR_NON_TIMEGAP_ELMNT<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    if(!(indptr.size()==2)) {
+        std::cerr<<"calculate_rehit_probability(): indptr.size() should ==2"
+            <<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    if(!(indptr[0]==0)) {
+        std::cerr<<"calculate_rehit_probability(): indptr[0] should ==0"
+            <<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    if(!(indptr[1]==curQueue.size()-1+NR_NON_TIMEGAP_ELMNT)) {
+        std::cerr
+            <<"calculate_rehit_probability(): indptr[1] should "
+            <<"==curQueue.size()-1+NR_NON_TIMEGAP_ELMNT"<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    /** check for correctness::end */
+
+    #ifdef EXPORT_PREDICTION_INPUT
+    std::stringstream prediction_input_stringstream0;
+    prediction_input_stringstream0<<"prediction_input."<<LFO::timestamp
+        <<".window"<<(LFO::train_seq-1)/LFO::windowSize
+        <<".txt";
+    std::string prediction_input_filename0;
+    prediction_input_stringstream0>>prediction_input_filename0;
+    std::ofstream prediction_input_ofstream0;
+    prediction_input_ofstream0.open(prediction_input_filename0, 
+        std::ios_base::app);
+    /**
+    for(auto i : data) {
+        if(first_column) {
+            prediction_input_ofstream0<<i;
+            first_column=false;
+        } else 
+            prediction_input_ofstream0<<'\t'<<i;
+    }
+    */
+    int iter1;
+    for(iter1=0; iter1<data.size()-NR_NON_TIMEGAP_ELMNT; iter1++) {
+        prediction_input_ofstream0<<data[iter1]<<'\t';
+    }
+    for( ; iter1<HISTFEATURES; iter1++) {
+        prediction_input_ofstream0<<"NA"<<'\t';
+    }
+    /** TO_CONTINUE: add NA to make up 50 time gaps columns  */
+    prediction_input_ofstream0<<data[data.size()-NR_NON_TIMEGAP_ELMNT+0];
+    prediction_input_ofstream0<<'\t';
+    prediction_input_ofstream0<<data[data.size()-NR_NON_TIMEGAP_ELMNT+1];
+    prediction_input_ofstream0<<'\t';
+    prediction_input_ofstream0<<data[data.size()-NR_NON_TIMEGAP_ELMNT+2];
+    prediction_input_ofstream0<<std::endl;
+    prediction_input_ofstream0.close();
+    #endif
 
         int return_LGBM_BPFC= LGBM_BoosterPredictForCSR(
                 LFO::booster, 
