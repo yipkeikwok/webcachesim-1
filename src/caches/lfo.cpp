@@ -1374,6 +1374,25 @@ void LFO::calculateOPT(uint64_t cacheSize, int optimization_objective) {
     /** TESTING_CODE::beginning */
     /**
     */
+
+    #if 0
+    /** measuring accuracy */
+    int nr_correct, nr_entry;
+    nr_correct = nr_entry = (int)0; 
+    for(struct trEntry trEntry0 : LFO::windowTrace) {
+        nr_entry++;
+        if(trEntry0.decision_prediction == trEntry0.toCache) 
+            nr_correct++;
+    }
+    if(nr_entry != LFO::windowSize) {
+        std::cerr<<"calculateOPT(): nr_entry != LFO::windowSize"<<std::endl;
+        std::cerr<<"nr_entry= "<<nr_entry<<std::endl;
+        std::cerr<<"nr_correct= "<<nr_correct<<std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    std::cerr<<"calculateOPT(): accuracy= "<<(float)nr_correct/nr_entry
+        <<std::endl;
+    #endif
     std::cerr<<"LFO::calculateOPT: cacheSize = " <<cacheSize
         <<", hitc = "<< hitc <<", bytehitc = "<< bytehitc <<std::endl; 
     /** TESTING_CODE::end */
