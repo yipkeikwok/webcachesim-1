@@ -436,10 +436,16 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     for(const trEntry entry0 : windowTrace) {
         #ifdef VERIFY_ACCURACY_CALCULATION
         if(entry0.decision_prediction != LFO::decision_array[nr_prediction]) {
-            std::cerr
-                <<"entry0.decision_prediction != LFO::decision_array["
-                <<nr_prediction<<"]";
-            std::exit(EXIT_FAILURE);
+            if(!LFO::init) {
+                std::cerr
+                    <<"entry0.decision_prediction != LFO::decision_array["
+                    <<nr_prediction<<"]"<<std::endl;
+                std::cerr<<"entry0.decision_prediction == "
+                    <<entry0.decision_prediction;
+                std::cerr<<"LFO::decision_array["<<nr_prediction<<"] == " 
+                    << LFO::decision_array[nr_prediction] << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
         }
         #endif
         nr_prediction++;
@@ -451,8 +457,10 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
             <<std::endl;
         std::exit(EXIT_FAILURE);
     }
-    std::cerr<<"Window"<<LFO::train_seq/LFO::windowSize-1<<" accuracy= "
-        << (float)nr_correct/nr_prediction << std::endl;
+    if(!LFO::init) {
+        std::cerr<<"Window"<<LFO::train_seq/LFO::windowSize-1<<" accuracy= "
+            << (float)nr_correct/nr_prediction << std::endl;
+    }
 
     /** EVALUATING MODEL ACCURACY::end */
 
@@ -1304,6 +1312,22 @@ double LFO::calculate_rehit_probability(
         data.clear(); 
 
         double rehit_probability = result[0]; 
+
+        #ifdef EXPORT_CACHING_DECISION
+        std::stringstream caching_decision_stringstream0;
+        caching_decision_stringstream0<<"caching_decision."<<LFO::timestamp
+            <<".window"<<(LFO::train_seq-1)/LFO::windowSize
+            <<".txt";
+        std::string caching_decision_filename0;
+        caching_decision_stringstream0>>caching_decision_filename0;
+        std::ofstream caching_decision_ofstream0;
+        caching_decision_ofstream0.open(caching_decision_filename0, 
+            std::ios_base::app);
+        caching_decision_ofstream0<<(rehit_probability<.5?0:1);
+        caching_decision_ofstream0<<std::endl;
+        caching_decision_ofstream0.close();
+        #endif
+
         result.clear(); 
         /** predicting rehit probability::end */
         return rehit_probability; 

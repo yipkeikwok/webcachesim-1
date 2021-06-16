@@ -19,6 +19,11 @@
 #include "mongocxx/client.hpp"
 #endif
 
+/**
+#define VERIFY_ACCURACY_CALCULATION
+*/
+#define EXPORT_CACHING_DECISION
+
 // for LRU. LRU to be used during 1st window 
 typedef std::list<uint64_t >::iterator ListIteratorType;
 // for LRU. LRU to be used during 1st window 
