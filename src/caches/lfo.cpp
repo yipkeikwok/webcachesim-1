@@ -195,7 +195,7 @@ bool LFOCache::lookup(SimpleRequest& req)
             hit(it, rehit_probability);
             */
             if(rehit_probability<(double).5) {
-                LFO::windowTrace.end()->decision_prediction=false;
+                LFO::windowTrace.back().decision_prediction=false;
                 #ifdef VERIFY_ACCURACY_CALCULATION
                 LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
                 #endif
@@ -220,7 +220,7 @@ bool LFOCache::lookup(SimpleRequest& req)
                     std::exit(EXIT_FAILURE);
                 }
                 /** TESTING_CODE::end */
-                LFO::windowTrace.end()->decision_prediction=true;
+                LFO::windowTrace.back().decision_prediction=true;
                 #ifdef VERIFY_ACCURACY_CALCULATION
                 LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
                 #endif
@@ -586,13 +586,13 @@ void LFOCache::admit(SimpleRequest& req)
         req, getSize()-getCurrentSize(), _objective
         );
     if(rehit_probability<(double).5) {
-        LFO::windowTrace.end()->decision_prediction=false;
+        LFO::windowTrace.back().decision_prediction=false;
         #ifdef VERIFY_ACCURACY_CALCULATION
         LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=false;
         #endif
         return;
     }
-    LFO::windowTrace.end()->decision_prediction=true;
+    LFO::windowTrace.back().decision_prediction=true;
     #ifdef VERIFY_ACCURACY_CALCULATION
     LFO::decision_array[(LFO::train_seq-1)%LFO::windowSize]=true;
     #endif
