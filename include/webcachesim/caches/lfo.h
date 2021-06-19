@@ -27,23 +27,23 @@
 */
 
 #ifndef EXPORT_MODEL
-#define EXPORT_MODEL
+/** #define EXPORT_MODEL */
 #endif
 
 #ifndef EXPORT_PREDICTION_INPUT
-#define EXPORT_PREDICTION_INPUT
+/** #define EXPORT_PREDICTION_INPUT */
 #endif
 
 #ifndef EXPORT_TRAINING_DATA
-#define EXPORT_TRAINING_DATA
+/** #define EXPORT_TRAINING_DATA */
 #endif
 
 #ifndef EXPORT_CALCULATEOPT_DECISION
-#define EXPORT_CALCULATEOPT_DECISION
+/** #define EXPORT_CALCULATEOPT_DECISION */
 #endif
 
 #ifndef EXPORT_CACHING_DECISION
-#define EXPORT_CACHING_DECISION
+/** #define EXPORT_CACHING_DECISION */
 #endif
 
 // for LRU. LRU to be used during 1st window 
