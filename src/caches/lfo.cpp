@@ -23,14 +23,6 @@
 #define ISSUE20210206b
 #endif
 
-#ifndef EXPORT_MODEL
-#define EXPORT_MODEL
-#endif
-
-#ifndef EXPORT_PREDICTION_INPUT
-#define EXPORT_PREDICTION_INPUT
-#endif
-
 // golden section search helpers
 #define SHFT2(a,b,c) (a)=(b);(b)=(c);
 #define SHFT3(a,b,c,d) (a)=(b);(b)=(c);(c)=(d);
@@ -264,8 +256,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     LFO::calculateOPT(cache_size, objective);
 
     /** exporting calculateOPT() decisions::beginning */
-    #if 0
-    #endif
+    #ifdef EXPORT_CALCULATEOPT_DECISION
     std::stringstream stringstream0;
     stringstream0<<"calculateOPT.decision."<<LFO::timestamp<<".txt";
     std::string decision_filename;
@@ -280,6 +271,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
         decision_ofstream<<std::endl;
     }
     decision_ofstream.close();
+    #endif
     /** exporting calculateOPT() decisions::end */
 
     /** 
@@ -408,6 +400,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
             <<" should==(int32_t)0 or 50";
         std::exit(EXIT_FAILURE);
     }
+    #if 0
     std::cerr<<"202101211508:";
     int32_t iter0;
     for(
@@ -422,6 +415,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     std::cerr<<'\t'<<iter0;
     std::cerr<<'\t'<<object_id1;
     std::cerr<<std::endl;
+    #endif
     /** 202101211508::end */
 
     LFO::trainModel(labels, indptr, indices, data);
@@ -1110,6 +1104,7 @@ double LFO::calculate_rehit_probability(
         /** TESTING_CODE::end */
         // so that result.data() does not return nullptr 
         result.reserve((size_t)4); 
+        #if 0
         if((
             (LFO::train_seq-1)%(LFO::windowSize/10)
             )==0) {
@@ -1137,7 +1132,8 @@ double LFO::calculate_rehit_probability(
             for(int i=0; i<data.size(); i++) 
                 std::cerr<<data[i]<<" ";
             std::cerr<<std::endl;
-        } 
+        }
+    `   #endif 
 
 	//
 	// Added by David on 2021-05-10
@@ -1750,6 +1746,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
     /** TESTING_CODE::end */
 
     /** EXPORTING TRAINING DATA::beginning */
+    #ifdef EXPORT_TRAINING_DATA
     std::stringstream stringstream0; 
     stringstream0<<"training_data."<<LFO::timestamp
         <<".window"<<(LFO::train_seq/LFO::windowSize)-1
@@ -1827,6 +1824,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         std::exit(EXIT_FAILURE);
     }
     training_data_ofstream.close();
+    #endif
     /** EXPORTING TRAINING DATA::end */
     std::string params = param_map_to_string(LFO::trainParams);
     LGBM_DatasetCreateFromCSR(
@@ -1870,6 +1868,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 break;
             }
         }
+        #if 0
         char booster_dump[1000000];
         int64_t out_len;
         if(!LGBM_BoosterDumpModel(
@@ -1892,6 +1891,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 <<std::endl;
             std::exit(EXIT_FAILURE);
         }
+        #endif
     } else {
         /** TESTING_CODE::beginning */
         /**
@@ -1937,6 +1937,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         std::cerr<<"Replacing model ..."<<std::endl; 
         LFO::booster = newBooster;
 
+        #if 0
         char booster_dump[1000000];
         int64_t out_len;
         if(!LGBM_BoosterDumpModel(
@@ -1959,6 +1960,7 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
                 <<std::endl;
             std::exit(EXIT_FAILURE);
         }
+        #endif
     }
     LGBM_DatasetFree(trainData);
 
