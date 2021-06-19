@@ -1104,6 +1104,7 @@ double LFO::calculate_rehit_probability(
         /** TESTING_CODE::end */
         // so that result.data() does not return nullptr 
         result.reserve((size_t)4); 
+
         #if 0
         if((
             (LFO::train_seq-1)%(LFO::windowSize/10)
@@ -1133,7 +1134,7 @@ double LFO::calculate_rehit_probability(
                 std::cerr<<data[i]<<" ";
             std::cerr<<std::endl;
         }
-    `   #endif 
+        #endif
 
 	//
 	// Added by David on 2021-05-10
