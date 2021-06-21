@@ -42,6 +42,9 @@ namespace webcachesim {
         virtual void admit(SimpleRequest &req) = 0;
 
         // configure cache parameters
+        /** after 1st invocation, setSize() is called by 
+            Framework::update_stats() in simulation.cpp 
+        */
         virtual void setSize(const uint64_t &cs) {
             _cacheSize = cs;
             //delay eviction because not all algorithms implement such interface
