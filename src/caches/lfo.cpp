@@ -384,7 +384,7 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
 
     /** 202101211508::beginning */
     int window_id1=(LFO::train_seq-1)/windowSize;
-    int window_index1=window_id1*100000;
+    int window_index1=(window_id1%10)*(LFO::windowSize/10);
     uint64_t object_id1=LFO::windowTrace[window_index1].id;
     int32_t indices_begin = indptr[window_index1]; 
     if(!
