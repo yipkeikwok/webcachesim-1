@@ -383,16 +383,16 @@ void LFO::conclude_window(int objective, uint64_t cache_size)
     #endif
 
     /** 202101211508::beginning */
-    int window_id1=(LFO::train_seq-1)/windowSize;
-    int window_index1=window_id1*100000;
+    uint64_t window_id1=(LFO::train_seq-1)/LFO::windowSize;
+    uint64_t window_index1=(window_id1%10)*(LFO::windowSize/10);
     uint64_t object_id1=LFO::windowTrace[window_index1].id;
-    int32_t indices_begin = indptr[window_index1]; 
+    uint64_t indices_begin = indptr[window_index1]; 
     if(!
         (
-            (indices[indices_begin]==(int32_t) 0) 
+            (indices[indices_begin]==(uint64_t) 0) 
             #ifdef ISSUE20210206b
             ||
-            (indices[indices_begin]==(int32_t)50)
+            (indices[indices_begin]==(uint64_t)50)
             #endif
         )) {
         std::cerr
