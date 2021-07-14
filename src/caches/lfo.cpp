@@ -1905,19 +1905,34 @@ void LFO::trainModel(vector<float> &labels, vector<int32_t> &indptr,
         #ifdef MODEL_REFITTING 
         int64_t len;
         //YK: get number of predictions 
-        LGBM_BoosterCalcNumPredict(booster, indptr.size() - 1, 
-            C_API_PREDICT_LEAF_INDEX, 0, &len);
+        LGBM_BoosterCalcNumPredict(
+            LFO::booster, /** TODO_RBDX: should it be newBooster? */
+            indptr.size() - 1, 
+            C_API_PREDICT_LEAF_INDEX, /** why not C_API_PREDICT_NORMAL? */
+            0, /** start_iteration */
+            0, /** num_iteration. <=0 means no limit */
+            &len /** Length of prediction. Type: int64_t */
+            );
         vector<double> tmp(len);
         //YK: make prediction for a new dataset in CSR format 
-        LGBM_BoosterPredictForCSR(booster, static_cast<void*>(indptr.data()), 
+        LGBM_BoosterPredictForCSR(
+            LFO::booster, /** TODO_RBDX: should be newBooster? */
+            static_cast<void*>(indptr.data()), 
             C_API_DTYPE_INT32, indices.data(), static_cast<void*>(data.data()), 
-            C_API_DTYPE_FLOAT64, indptr.size(), data.size(), HISTFEATURES + 3,
-            C_API_PREDICT_LEAF_INDEX, 0, trainParams, &len, tmp.data());
+            C_API_DTYPE_FLOAT64, /** data_type. TODO_RBDX: Should be INT32? */
+            indptr.size(), data.size(), HISTFEATURES + 3,
+            C_API_PREDICT_LEAF_INDEX, 0, 
+            0, /** num_iteration. <=0 means no limit */
+            params.c_str(), 
+            &len, tmp.data());
         //YK: iterating through vector<double> tmp
         vector<int32_t> predLeaf(tmp.begin(), tmp.end());
         tmp.clear();
         //YK: merging model from booster to newBooster 
-        LGBM_BoosterMerge(newBooster, booster);
+        if(!(LGBM_BoosterMerge(newBooster, LFO::booster)==0)) {
+            std::cerr<<"LGBM_BoosterMerge() Failed"<<std::endl;
+            std::exit(EXIT_FAILURE);
+        }
         //YK: refit the tree model using the new data (online learning) 
         std::cerr<<"Refitting model ..."<<std::endl; 
         LGBM_BoosterRefit(newBooster, predLeaf.data(), indptr.size() - 1, 

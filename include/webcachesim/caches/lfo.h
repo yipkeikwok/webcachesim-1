@@ -46,6 +46,8 @@
 /** #define EXPORT_CACHING_DECISION */
 #endif
 
+#define MODEL_REFITTING
+
 // for LRU. LRU to be used during 1st window 
 typedef std::list<uint64_t >::iterator ListIteratorType;
 // for LRU. LRU to be used during 1st window 
